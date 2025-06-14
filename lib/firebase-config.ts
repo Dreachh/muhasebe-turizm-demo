@@ -1,6 +1,4 @@
-'use client';
-
-// Merkezi Firebase yapılandırması
+// Firebase yapılandırması - Server ve Client için ortak
 export const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -10,4 +8,19 @@ export const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
   databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL
+};
+
+// Sunucu tarafı için güvenlik kontrolü
+export const isServerSide = () => typeof window === 'undefined';
+
+// Firebase admin config (sunucu tarafı için)
+export const getFirebaseConfig = () => {
+  if (isServerSide()) {
+    return {
+      ...firebaseConfig,
+      // Sunucu tarafı için ek güvenlik ayarları
+      ignoreUndefinedProperties: true,
+    };
+  }
+  return firebaseConfig;
 };

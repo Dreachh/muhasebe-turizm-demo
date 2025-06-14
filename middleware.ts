@@ -1,7 +1,13 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { isServerSide } from './lib/firebase-config';
 
 export async function middleware(request: NextRequest) {
+  // Sunucu tarafı olduğunu kontrol et ve ona göre davran
+  if (isServerSide()) {
+    console.log('Middleware sunucu tarafında çalışıyor');
+  }
+
   // API ve statik dosya istekleri için direkt geçiş
   if (
     request.nextUrl.pathname.startsWith('/api/') ||
@@ -22,7 +28,7 @@ export async function middleware(request: NextRequest) {
   return NextResponse.next();
 }
 
-// Middleware'in çalışacağı yolları sadeleştiriyoruz
+// Middleware'in çalışacağı yollar - Sadece gerekli rotaları ekle
 export const config = {
   matcher: ['/', '/admin/:path*'],
 };
