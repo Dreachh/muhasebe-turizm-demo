@@ -8,7 +8,7 @@ import { getStorage } from "firebase/storage";
 import { getDatabase, Database } from "firebase/database";
 
 // Firebase yapılandırmasını import et
-import { firebaseConfig } from './firebase-config';
+import { firebaseConfig, isServerSide } from './firebase-config';
 
 // Singleton Firebase servislerini içerecek değişkenler
 let app: FirebaseApp;
@@ -20,44 +20,33 @@ let rtdb: Database;
 // Firebase'i başlatmak için güvenli bir fonksiyon
 function initFirebase(): boolean {
   try {
-    // Browser tarafında olduğumuzu kontrol et
-    if (typeof window === 'undefined') {
+    // Server-side kontrolü
+    if (isServerSide()) {
       console.log('Server tarafında çalışıyor, Firebase başlatma atlanıyor');
       return false;
     }
 
-    if (!firebaseConfig.apiKey) {
-      console.error('Firebase API anahtarı eksik! Lütfen yapılandırmayı kontrol edin.');
+    // Config kontrolü
+    if (!firebaseConfig.apiKey || !firebaseConfig.projectId || !firebaseConfig.databaseURL) {
+      console.error('Eksik Firebase yapılandırması!');
       return false;
     }
     
     // Eğer zaten başlatılmışsa, mevcut olanı kullan
     if (getApps().length === 0) {
       console.log("Firebase uygulaması başlatılıyor...");
-      try {
-        app = initializeApp(firebaseConfig);
-      } catch (initError) {
-        console.error("Firebase başlatma hatası:", initError);
-        return false;
-      }
+      app = initializeApp(firebaseConfig);
+      db = getFirestore(app);
+      auth = getAuth(app);
+      rtdb = getDatabase(app);
+      storage = getStorage(app);
+      console.log("Firebase servisleri başarıyla başlatıldı");
+      return true;
     } else {
-      console.log("Firebase zaten başlatılmış, mevcut instance kullanılıyor");
-      try {
-        app = getApps()[0];
-      } catch (getAppError) {
-        console.error("Firebase instance erişim hatası:", getAppError);
-        return false;
-      }
+      console.log("Mevcut Firebase instance kullanılıyor");
+      app = getApps()[0];
+      return true;
     }
-    
-    // Firebase servislerini başlat
-    db = getFirestore(app);
-    rtdb = getDatabase(app);
-    auth = getAuth(app);
-    storage = getStorage(app);
-    
-    console.log("Firebase servisleri başarıyla başlatıldı");
-    return true;
   } catch (error) {
     console.error("Firebase başlatma hatası:", error);
     return false;
