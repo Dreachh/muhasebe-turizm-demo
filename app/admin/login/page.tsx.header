@@ -1,0 +1,69 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Eye, EyeOff } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { getAdminCredentials } from "@/lib/db-firebase";
+import { initializeFirebaseClient } from '@/lib/firebase-direct';
+
+// Admin login bileşeni
+export default function AdminLogin() {
+  // Firebase durumu için state
+  const [firebaseInitialized, setFirebaseInitialized] = useState(false);
+  
+  // URL parametrelerini kontrol et
+  useEffect(() => {
+    // URL'den mesaj parametresini al
+    const urlParams = new URLSearchParams(window.location.search);
+    const message = urlParams.get('message');
+    const expired = urlParams.get('expired');
+    
+    // Mesajları kontrol et
+    if (message === 'session_expired') {
+      setError('Oturum süresi doldu. Lütfen yeniden giriş yapın.');
+    } else if (expired === 'true') {
+      setError('Oturumunuz başka bir yerden sonlandırıldı. Lütfen yeniden giriş yapın.');
+    } else if (message === 'browser_closed') {
+      setError('Tarayıcı kapatıldığı için oturumunuz sonlandırıldı. Lütfen yeniden giriş yapın.');
+    }
+    
+    // Firebase'i başlat - try/catch bloklarını ayıralım
+    const initFirebase = async () => {
+      try {
+        console.log("Admin login sayfasında Firebase başlatılıyor...");
+        // Yeni Firebase-direct modülünü kullanarak başlat
+        if (typeof window !== 'undefined') {
+          const { success } = initializeFirebaseClient();
+          console.log("Firebase başlatma sonucu:", success ? "Başarılı" : "Başarısız");
+          setFirebaseInitialized(success);
+        } else {
+          console.error("Tarayıcı ortamında değiliz, Firebase başlatılamaz!");
+        }
+      } catch (error) {
+        console.error("Firebase başlatma hatası:", error);
+        // Hata durumunda durum güncellemesi
+        setFirebaseInitialized(false);
+        setError('Firebase bağlantısı kurulamadı. Lütfen daha sonra tekrar deneyin.');
+      }
+    };
+
+    // Yerel depolama temizliği
+    const clearStorageData = () => {
+      try {
+        localStorage.removeItem('adminLoggedIn');
+        sessionStorage.removeItem('adminLoggedIn');
+        document.cookie = "adminLoggedInClient=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+      } catch (storageError) {
+        console.error("Depolama temizleme hatası:", storageError);
+      }
+    };
+    
+    // Fonksiyonları çalıştır
+    initFirebase();
+    clearStorageData();
+  }, []);

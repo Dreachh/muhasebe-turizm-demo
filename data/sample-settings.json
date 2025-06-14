@@ -1,0 +1,30 @@
+{
+  "providers": [
+    {"id": "prov-1", "name": "ABC Turizm", "type": "Ulaşım"},
+    {"id": "prov-2", "name": "XYZ Otel", "type": "Konaklama"},
+    {"id": "prov-3", "name": "Rehber Ayşe", "type": "Rehberlik"},
+    {"id": "prov-4", "name": "Passionis Travel", "type": "Acente"},
+    {"id": "prov-5", "name": "Balloon Cappadocia", "type": "Aktivite"},
+    {"id": "prov-6", "name": "Uzungöl Transfer", "type": "Transfer"},
+    {"id": "prov-7", "name": "Efes Turizm", "type": "Ulaşım"},
+    {"id": "prov-8", "name": "Pamukkale Hotel", "type": "Konaklama"}
+  ],
+  "expenseTypes": [
+    {"id": "exp-type-1", "name": "Ulaşım"},
+    {"id": "exp-type-2", "name": "Konaklama"},
+    {"id": "exp-type-3", "name": "Rehberlik"},
+    {"id": "exp-type-4", "name": "Acente"},
+    {"id": "exp-type-5", "name": "Transfer"},
+    {"id": "exp-type-6", "name": "Aktivite"},
+    {"id": "exp-type-7", "name": "Yiyecek & İçecek"}
+  ],
+  "referralSources": [
+    {"id": "ref-1", "name": "Web Sitesi"},
+    {"id": "ref-2", "name": "Instagram"},
+    {"id": "ref-3", "name": "Google"},
+    {"id": "ref-4", "name": "Müşteri Tavsiyesi"},
+    {"id": "ref-5", "name": "Facebook"},
+    {"id": "ref-6", "name": "Acenta Ortaklığı"},
+    {"id": "ref-7", "name": "Otel Yönlendirmesi"}
+  ]
+}

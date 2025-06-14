@@ -1,0 +1,20 @@
+/* Para birimi sembolleri ve değerleri için stil */
+.moneyContainer {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+
+.currencySymbol {
+  display: inline-block;
+  width: 14px; /* Sabit genişlik para birimi sembolü için */
+  text-align: center;
+  margin-right: 4px;
+}
+
+.amountValue {
+  display: inline-block;
+  flex: 1;
+  text-align: right;
+}
