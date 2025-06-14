@@ -22,7 +22,7 @@ export async function middleware(request: NextRequest) {
   return NextResponse.next();
 }
 
-// Middleware'in çalışacağı yollar
+// Middleware'in çalışacağı yolları sadeleştiriyoruz
 export const config = {
-  matcher: ['/', '/admin/:path*', '/((?!api|_next/static|_next/image|favicon.ico).*)'],
+  matcher: ['/', '/admin/:path*'],
 };
