@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Input } from "@/components/ui/input"
 import { 
   ChevronLeft, 
   ChevronRight, 
@@ -57,6 +58,7 @@ interface CalendarViewProps {
 export function CalendarView({ onNavigate, toursData = [] }: CalendarViewProps) {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [viewMode, setViewMode] = useState("month")
+  const [manualDate, setManualDate] = useState("")
 
   // Modal state'leri
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -102,6 +104,26 @@ export function CalendarView({ onNavigate, toursData = [] }: CalendarViewProps) 
       newDate.setDate(newDate.getDate() + 1)
     }
     setCurrentDate(newDate)
+  }
+
+  const handleManualDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setManualDate(e.target.value)
+  }
+
+  const handleManualDateSubmit = () => {
+    if (manualDate) {
+      const newDate = new Date(manualDate + 'T00:00:00') // ISO format'ında parse et
+      if (!isNaN(newDate.getTime())) {
+        setCurrentDate(newDate)
+        setManualDate("")
+      }
+    }
+  }
+
+  const handleManualDateKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      handleManualDateSubmit()
+    }
   }
 
   const handleToday = () => {
@@ -266,55 +288,57 @@ export function CalendarView({ onNavigate, toursData = [] }: CalendarViewProps) 
   // Haftalık görünüm
   const renderWeekView = () => {
     const weekDays = getWeekDays()
-    const hours = Array.from({ length: 12 }, (_, i) => i + 8) // 8:00 - 19:00
 
     return (
       <div className="rounded-md border">
-        <div className="grid grid-cols-8 border-b bg-gray-50">
-          <div className="py-2 text-center font-medium text-gray-500 border-r">Saat</div>
+        <div className="grid grid-cols-7 border-b bg-gray-50">
           {weekDays.map((date, index) => (
             <div
               key={index}
-              className={`py-2 text-center font-medium ${
+              className={`py-3 text-center font-medium border-r last:border-r-0 ${
                 date.toDateString() === new Date().toDateString() ? "bg-blue-50 text-blue-600" : "text-gray-500"
               }`}
             >
-              <div>{dayNames[index]}</div>
-              <div className="text-lg">{date.getDate()}</div>
+              <div className="text-sm">{dayNames[index]}</div>
+              <div className="text-xl font-bold mt-1">{date.getDate()}</div>
+              <div className="text-xs opacity-70">{monthNames[date.getMonth()]}</div>
             </div>
           ))}
         </div>
 
-        <div className="grid grid-cols-8">
-          {hours.map((hour) => (
-            <React.Fragment key={hour}>
-              <div className="border-r border-b p-2 text-xs text-gray-500 bg-gray-50">{hour}:00</div>
-              {weekDays.map((day, dayIndex) => {
-                const dayEvents = getEventsForDay(day)
+        <div className="grid grid-cols-7">
+          {weekDays.map((day, dayIndex) => {
+            const dayEvents = getEventsForDay(day)
 
-                return (
-                  <div key={dayIndex} className="border-b p-1 min-h-[60px] relative">
-                    {dayEvents.map((event) => (
-                      <div
-                        key={event.id}
-                        className="text-xs p-1 rounded cursor-pointer text-white absolute inset-x-1"
-                        style={{ backgroundColor: event.color || "#4f46e5" }}
-                        onClick={() => handleEventClick(event)}
-                      >
-                        <div className="font-medium truncate">{event.title}</div>
-                        <div className="flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
-                          <span>{event.time}</span>
-                          <Users className="h-3 w-3 ml-1" />
-                          <span>{event.customers}</span>
-                        </div>
+            return (
+              <div key={dayIndex} className="border-r last:border-r-0 p-2 min-h-[200px] space-y-1">
+                {dayEvents.length > 0 ? (
+                  dayEvents.map((event) => (
+                    <div
+                      key={event.id}
+                      className="text-xs p-2 rounded cursor-pointer text-white shadow-sm hover:shadow-md transition-shadow"
+                      style={{ backgroundColor: event.color || "#10b981" }}
+                      onClick={() => handleEventClick(event)}
+                    >
+                      <div className="font-medium truncate mb-1">{event.title || event.tourName}</div>
+                      <div className="flex items-center gap-1 text-xs opacity-90">
+                        {event.time && (
+                          <>
+                            <Clock className="h-3 w-3" />
+                            <span>{event.time}</span>
+                          </>
+                        )}
+                        <Users className="h-3 w-3 ml-auto" />
+                        <span>{event.customers}</span>
                       </div>
-                    ))}
-                  </div>
-                )
-              })}
-            </React.Fragment>
-          ))}
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-xs text-gray-400 text-center mt-4">Etkinlik yok</div>
+                )}
+              </div>
+            )
+          })}
         </div>
       </div>
     )
@@ -334,48 +358,51 @@ export function CalendarView({ onNavigate, toursData = [] }: CalendarViewProps) 
           </div>
         </div>
 
-        <div className="grid grid-cols-1">
-          {hours.map((hour) => {
-            const hourEvents = dayEvents.filter((event) => {
-              const eventHour = event.time ? Number.parseInt(event.time.split(":")[0]) : 0
-              return eventHour === hour
-            })
-
-            return (
-              <div key={hour} className="border-b flex">
-                <div className="border-r p-2 text-sm text-gray-500 bg-gray-50 w-20 text-center">{hour}:00</div>
-                <div className="flex-1 p-2 min-h-[80px] relative">
-                  {hourEvents.map((event) => (
-                    <div
-                      key={event.id}
-                      className="p-2 rounded cursor-pointer text-white mb-1"
-                      style={{ backgroundColor: event.color || "#4f46e5" }}
-                      onClick={() => handleEventClick(event)}
-                    >
-                      <div className="font-medium">{event.title}</div>
-                      <div className="flex items-center gap-2 mt-1 text-sm">
-                        <div className="flex items-center">
-                          <Clock className="h-4 w-4 mr-1" />
-                          <span>{event.time}</span>
-                        </div>
-                        <div className="flex items-center">
-                          <Users className="h-4 w-4 mr-1" />
-                          <span>{event.customers} Kişi</span>
-                        </div>
-                        {event.location && (
-                          <div className="flex items-center">
-                            <MapPin className="h-4 w-4 mr-1" />
-                            <span>{event.location}</span>
-                          </div>
-                        )}
-                      </div>
+        {/* Eğer o gün için etkinlik varsa göster */}
+        {dayEvents.length > 0 ? (
+          <div className="p-4 space-y-3">
+            <h3 className="font-medium text-gray-700 mb-3">Bu Günün Etkinlikleri ({dayEvents.length})</h3>
+            {dayEvents.map((event) => (
+              <div
+                key={event.id}
+                className="p-3 rounded-lg cursor-pointer text-white shadow hover:shadow-md transition-shadow"
+                style={{ backgroundColor: event.color || "#10b981" }}
+                onClick={() => handleEventClick(event)}
+              >
+                <div className="font-medium text-lg">{event.title || event.tourName}</div>
+                <div className="flex items-center gap-4 mt-2 text-sm opacity-90">
+                  {event.time && (
+                    <div className="flex items-center gap-1">
+                      <Clock className="h-4 w-4" />
+                      <span>{event.time}</span>
                     </div>
-                  ))}
+                  )}
+                  <div className="flex items-center gap-1">
+                    <Users className="h-4 w-4" />
+                    <span>{event.customers || event.customerName} kişi</span>
+                  </div>
+                  {event.location && (
+                    <div className="flex items-center gap-1">
+                      <MapPin className="h-4 w-4" />
+                      <span>{event.location}</span>
+                    </div>
+                  )}
                 </div>
+                {event.totalPrice !== undefined && event.currency && (
+                  <div className="mt-2 text-sm opacity-90">
+                    <span className="font-medium">{formatCurrency(event.totalPrice, event.currency)}</span>
+                  </div>
+                )}
               </div>
-            )
-          })}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <div className="p-8 text-center text-gray-500">
+            <CalendarIcon className="h-12 w-12 mx-auto mb-3 opacity-50" />
+            <p className="text-lg font-medium">Bu gün için etkinlik bulunmuyor</p>
+            <p className="text-sm mt-1">Başka bir gün seçebilir veya yeni etkinlik ekleyebilirsiniz.</p>
+          </div>
+        )}
       </div>
     )
   }
@@ -392,6 +419,27 @@ export function CalendarView({ onNavigate, toursData = [] }: CalendarViewProps) 
             <Button variant="outline" size="sm" onClick={handleToday}>
               Bugün
             </Button>
+            
+            {/* Manuel tarih girişi */}
+            <div className="flex items-center gap-1">
+              <Input
+                type="date"
+                value={manualDate}
+                onChange={handleManualDateChange}
+                onKeyPress={handleManualDateKeyPress}
+                className="w-36"
+                placeholder="Tarih seçin"
+              />
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleManualDateSubmit}
+                disabled={!manualDate}
+              >
+                Git
+              </Button>
+            </div>
+            
             <Button variant="outline" size="icon" onClick={handlePrevious}>
               <ChevronLeft className="h-4 w-4" />
             </Button>

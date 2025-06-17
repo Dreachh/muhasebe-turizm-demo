@@ -192,28 +192,36 @@ export function MainDashboard({ onNavigate, financialData = [], toursData = [], 
       acc[currency] = (acc[currency] || 0) + amount;
       return acc;
     }, {});
-
-  // Tur Geliri: Sadece totalPrice veya ödenen kısım, completed ise aktiviteler ayrıca eklenmez!
+  // Tur Geliri: Tüm turların gerçek toplam değeri (ödeme durumundan bağımsız)
   const tourIncomeByCurrency = toursData.reduce<Record<string, number>>((acc, tour: TourData) => {
-    if (tour.paymentStatus === 'partial') {
-      const paidCur = tour.partialPaymentCurrency || tour.currency || 'TRY';
-      const paidAmount = Number(tour.partialPaymentAmount) || 0;
-      acc[paidCur] = (acc[paidCur] || 0) + paidAmount;
-      // Sadece kısmi ödenen aktiviteler eklenir
-      if (Array.isArray(tour.activities)) {
-        tour.activities.forEach((act: TourActivity) => {
-          if (act.partialPaymentAmount) {
-            const cur = act.partialPaymentCurrency || act.currency || tour.currency || 'TRY';
-            acc[cur] = (acc[cur] || 0) + Number(act.partialPaymentAmount);
-          }
-        });
-      }
-    } else if (tour.paymentStatus === 'completed') {
-      const cur = tour.currency || 'TRY';
-      acc[cur] = (acc[cur] || 0) + (Number(tour.totalPrice) || 0);
-      // completed durumunda aktiviteler ayrıca eklenmez!
+    // Ana tur tutarını ekle
+    const tourCurrency = tour.currency || 'TRY';
+    const tourTotal = Number(tour.totalPrice) || 0;
+    if (tourTotal > 0) {
+      acc[tourCurrency] = (acc[tourCurrency] || 0) + tourTotal;
     }
-    // Diğer durumlarda gelir eklenmez
+    
+    // Aktivitelerin toplamını da ekle (farklı para biriminde olanları ayrı ayrı göster)
+    if (Array.isArray(tour.activities)) {
+      tour.activities.forEach((act: TourActivity) => {
+        const actCurrency = act.currency || tourCurrency;
+        const actPrice = Number(act.price) || 0;
+        let actParticipants = 0;
+        
+        // Katılımcı sayısını doğru şekilde belirle
+        if (act.participantsType === 'all') {
+          actParticipants = Number(tour.numberOfPeople) || 0;
+        } else {
+          actParticipants = Number(act.participants) || 0;
+        }
+        
+        const activityTotal = actPrice * actParticipants;
+        if (activityTotal > 0) {
+          acc[actCurrency] = (acc[actCurrency] || 0) + activityTotal;
+        }
+      });
+    }
+    
     return acc;
   }, {});
 

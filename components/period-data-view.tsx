@@ -255,51 +255,182 @@ export function PeriodDataView() {
         if (existingGroup) {
           existingGroup.amount += period.tourExpenses;
         } else {
-          yearData.tourExpensesByCurrency.push({ amount: period.tourExpenses, currency });
-        }
+          yearData.tourExpensesByCurrency.push({ amount: period.tourExpenses, currency });        }
       }
       
-      // TRY cinsinden toplam değerleri hesapla
-      if (period.totalIncomeInTRY !== undefined) {
-        yearData.totalFinancialIncome += period.totalIncomeInTRY;
-      } else {
-        yearData.totalFinancialIncome += period.financialIncome;
-      }
-      
-      yearData.totalTours += period.tourCount
-      yearData.totalCustomers += period.customerCount
-    })
-
-    // Hesaplamalar ve ortalamalar
+      yearData.totalTours += period.tourCount;
+      yearData.totalCustomers += period.customerCount;
+    });// Hesaplamalar ve ortalamalar
     yearlyMap.forEach((data, year) => {
-      data.totalNetProfit = data.totalFinancialIncome - (data.totalCompanyExpenses + data.totalTourExpenses)
-      data.averageRevenuePerTour = data.totalTours > 0 ? data.totalFinancialIncome / data.totalTours : 0
-      data.averageRevenuePerCustomer = data.totalCustomers > 0 ? data.totalFinancialIncome / data.totalCustomers : 0
+      // Toplam değerleri para birimi gruplarından hesapla
+      data.totalFinancialIncome = data.financialIncomeByCurrency.reduce((sum, group) => sum + group.amount, 0);
+      data.totalTourIncome = data.tourIncomeByCurrency.reduce((sum, group) => sum + group.amount, 0);
+      data.totalCompanyExpenses = data.companyExpensesByCurrency.reduce((sum, group) => sum + group.amount, 0);
+      data.totalTourExpenses = data.tourExpensesByCurrency.reduce((sum, group) => sum + group.amount, 0);
+      
+      // Tüm gelirleri ve giderleri topla
+      const totalIncome = data.totalFinancialIncome + data.totalTourIncome;
+      const totalExpenses = data.totalCompanyExpenses + data.totalTourExpenses;
+      data.totalNetProfit = totalIncome - totalExpenses;
+      data.averageRevenuePerTour = data.totalTours > 0 ? totalIncome / data.totalTours : 0
+      data.averageRevenuePerCustomer = data.totalCustomers > 0 ? totalIncome / data.totalCustomers : 0
     })
 
-    return Array.from(yearlyMap.entries()).map(([year, data]) => ({
-      year,
+    return Array.from(yearlyMap.entries()).map(([year, data]) => ({      year,
       ...data
-    })).sort((a, b) => b.year - a.year)
-  }
+    })).sort((a, b) => b.year - a.year);
+  };
+  
   const calculateNetProfit = (period: PeriodData) => {
-    // Eğer TRY cinsinden toplam değerler varsa onları kullan
-    if (period.totalIncomeInTRY !== undefined && period.totalExpensesInTRY !== undefined) {
-      return period.totalIncomeInTRY - period.totalExpensesInTRY;
-    } 
-    // Yoksa eski hesaplama yöntemini kullan
-    return (period.financialIncome + period.tourIncome) - (period.companyExpenses + period.tourExpenses)
-  }
+    // Para birimi bazlı hesaplama: tüm gelirleri ve giderleri topla
+    let totalIncome = 0;
+    let totalExpenses = 0;
+    
+    // Finansal gelirler
+    if (period.financialIncomeByCurrency && period.financialIncomeByCurrency.length > 0) {
+      totalIncome += period.financialIncomeByCurrency.reduce((sum, group) => sum + group.amount, 0);
+    } else {
+      totalIncome += period.financialIncome || 0;
+    }
+    
+    // Tur gelirleri
+    if (period.tourIncomeByCurrency && period.tourIncomeByCurrency.length > 0) {
+      totalIncome += period.tourIncomeByCurrency.reduce((sum, group) => sum + group.amount, 0);
+    } else {
+      totalIncome += period.tourIncome || 0;
+    }
+    
+    // Şirket giderleri
+    if (period.companyExpensesByCurrency && period.companyExpensesByCurrency.length > 0) {
+      totalExpenses += period.companyExpensesByCurrency.reduce((sum, group) => sum + group.amount, 0);
+    } else {
+      totalExpenses += period.companyExpenses || 0;
+    }
+    
+    // Tur giderleri
+    if (period.tourExpensesByCurrency && period.tourExpensesByCurrency.length > 0) {
+      totalExpenses += period.tourExpensesByCurrency.reduce((sum, group) => sum + group.amount, 0);
+    } else {
+      totalExpenses += period.tourExpenses || 0;
+    }
+      return totalIncome - totalExpenses;
+  };
 
-  const calculateProfitMargin = (period: PeriodData) => {
-    // Eğer TRY cinsinden toplam gelir varsa onu kullan
-    const totalRevenue = period.totalIncomeInTRY !== undefined ? 
-      period.totalIncomeInTRY : 
-      (period.financialIncome + period.tourIncome);
+  // Para birimi bazlı net kar/zarar hesaplama
+  const calculateNetProfitByCurrency = (period: PeriodData) => {
+    const netProfitByCurrency: Record<string, number> = {};
+    
+    // Tüm para birimlerini topla
+    const allCurrencies = new Set<string>();
+    
+    // Gelir para birimlerini ekle
+    period.financialIncomeByCurrency?.forEach(group => allCurrencies.add(group.currency));
+    period.tourIncomeByCurrency?.forEach(group => allCurrencies.add(group.currency));
+    
+    // Gider para birimlerini ekle
+    period.companyExpensesByCurrency?.forEach(group => allCurrencies.add(group.currency));
+    period.tourExpensesByCurrency?.forEach(group => allCurrencies.add(group.currency));
+    
+    // Eski veri formatı için varsayılan para birimlerini ekle
+    if (!period.financialIncomeByCurrency && period.financialIncome > 0) {
+      allCurrencies.add(period.financialIncomeCurrency || 'TRY');
+    }
+    if (!period.tourIncomeByCurrency && period.tourIncome > 0) {
+      allCurrencies.add(period.tourIncomeCurrency || 'TRY');
+    }
+    if (!period.companyExpensesByCurrency && period.companyExpenses > 0) {
+      allCurrencies.add(period.companyExpensesCurrency || 'TRY');
+    }
+    if (!period.tourExpensesByCurrency && period.tourExpenses > 0) {
+      allCurrencies.add(period.tourExpensesCurrency || 'TRY');
+    }
+    
+    // Her para birimi için kar/zarar hesapla
+    allCurrencies.forEach(currency => {
+      let income = 0;
+      let expenses = 0;
+      
+      // Gelirler
+      income += period.financialIncomeByCurrency?.find(g => g.currency === currency)?.amount || 0;
+      income += period.tourIncomeByCurrency?.find(g => g.currency === currency)?.amount || 0;
+      
+      // Eski format için
+      if (!period.financialIncomeByCurrency && (period.financialIncomeCurrency || 'TRY') === currency) {
+        income += period.financialIncome || 0;
+      }
+      if (!period.tourIncomeByCurrency && (period.tourIncomeCurrency || 'TRY') === currency) {
+        income += period.tourIncome || 0;
+      }
+      
+      // Giderler
+      expenses += period.companyExpensesByCurrency?.find(g => g.currency === currency)?.amount || 0;
+      expenses += period.tourExpensesByCurrency?.find(g => g.currency === currency)?.amount || 0;
+      
+      // Eski format için
+      if (!period.companyExpensesByCurrency && (period.companyExpensesCurrency || 'TRY') === currency) {
+        expenses += period.companyExpenses || 0;
+      }
+      if (!period.tourExpensesByCurrency && (period.tourExpensesCurrency || 'TRY') === currency) {
+        expenses += period.tourExpenses || 0;
+      }
+      
+      const profit = income - expenses;
+      if (Math.abs(profit) > 0.01) {
+        netProfitByCurrency[currency] = profit;
+      }
+    });
+    
+    return netProfitByCurrency;
+  };
+    const calculateProfitMargin = (period: PeriodData) => {
+    // Para birimi bazlı toplam gelir hesapla
+    let totalRevenue = 0;
+    
+    // Finansal gelirler
+    if (period.financialIncomeByCurrency && period.financialIncomeByCurrency.length > 0) {
+      totalRevenue += period.financialIncomeByCurrency.reduce((sum, group) => sum + group.amount, 0);
+    } else {
+      totalRevenue += period.financialIncome || 0;
+    }
+    
+    // Tur gelirleri
+    if (period.tourIncomeByCurrency && period.tourIncomeByCurrency.length > 0) {
+      totalRevenue += period.tourIncomeByCurrency.reduce((sum, group) => sum + group.amount, 0);
+    } else {
+      totalRevenue += period.tourIncome || 0;
+    }
     
     if (totalRevenue === 0) return 0;
     return (calculateNetProfit(period) / totalRevenue) * 100;
-  }
+  };
+
+  // Para birimi bazlı kar marjı hesaplama
+  const calculateProfitMarginByCurrency = (period: PeriodData) => {
+    const netProfitByCurrency = calculateNetProfitByCurrency(period);
+    const marginByCurrency: Record<string, number> = {};
+    
+    Object.entries(netProfitByCurrency).forEach(([currency, profit]) => {
+      // Bu para birimindeki toplam geliri hesapla
+      let revenue = 0;
+      
+      revenue += period.financialIncomeByCurrency?.find(g => g.currency === currency)?.amount || 0;
+      revenue += period.tourIncomeByCurrency?.find(g => g.currency === currency)?.amount || 0;
+      
+      // Eski format için
+      if (!period.financialIncomeByCurrency && (period.financialIncomeCurrency || 'TRY') === currency) {
+        revenue += period.financialIncome || 0;
+      }
+      if (!period.tourIncomeByCurrency && (period.tourIncomeCurrency || 'TRY') === currency) {
+        revenue += period.tourIncome || 0;
+      }
+      
+      if (revenue > 0) {
+        marginByCurrency[currency] = (profit / revenue) * 100;
+      }
+    });
+    
+    return marginByCurrency;
+  };
 
   const getMonthName = (month: number) => {
     const months = [
@@ -409,15 +540,54 @@ export function PeriodDataView() {
             </div>
           </CardContent>
         </Card>
-      ) : (
-        <>
+      ) : (        <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {(() => {
               const filteredData = getFilteredPeriods()
-              // TRY cinsinden toplam gelir ve giderleri hesapla
-              const totalRevenue = filteredData.reduce((sum, p) => sum + (p.totalIncomeInTRY !== undefined ? p.totalIncomeInTRY : (p.financialIncome + p.tourIncome)), 0)
-              const totalExpenses = filteredData.reduce((sum, p) => sum + (p.totalExpensesInTRY !== undefined ? p.totalExpensesInTRY : (p.companyExpenses + p.tourExpenses)), 0)
-              const totalProfit = totalRevenue - totalExpenses
+              
+              // Para birimi bazlı toplamları hesapla
+              const totalIncomeByCurrency: Record<string, number> = {};
+              const totalExpensesByCurrency: Record<string, number> = {};
+              
+              filteredData.forEach(period => {
+                // Gelirler
+                if (period.financialIncomeByCurrency) {
+                  period.financialIncomeByCurrency.forEach(group => {
+                    totalIncomeByCurrency[group.currency] = (totalIncomeByCurrency[group.currency] || 0) + group.amount;
+                  });
+                }
+                if (period.tourIncomeByCurrency) {
+                  period.tourIncomeByCurrency.forEach(group => {
+                    totalIncomeByCurrency[group.currency] = (totalIncomeByCurrency[group.currency] || 0) + group.amount;
+                  });
+                }
+                
+                // Giderler
+                if (period.companyExpensesByCurrency) {
+                  period.companyExpensesByCurrency.forEach(group => {
+                    totalExpensesByCurrency[group.currency] = (totalExpensesByCurrency[group.currency] || 0) + group.amount;
+                  });
+                }
+                if (period.tourExpensesByCurrency) {
+                  period.tourExpensesByCurrency.forEach(group => {
+                    totalExpensesByCurrency[group.currency] = (totalExpensesByCurrency[group.currency] || 0) + group.amount;
+                  });
+                }
+              });
+              
+              // Net kar hesapla (para birimi bazlı)
+              const netProfitByCurrency: Record<string, number> = {};
+              const allCurrencies = new Set([...Object.keys(totalIncomeByCurrency), ...Object.keys(totalExpensesByCurrency)]);
+              
+              allCurrencies.forEach(currency => {
+                const income = totalIncomeByCurrency[currency] || 0;
+                const expense = totalExpensesByCurrency[currency] || 0;
+                const profit = income - expense;
+                if (Math.abs(profit) > 0.01) {
+                  netProfitByCurrency[currency] = profit;
+                }
+              });
+              
               const totalTours = filteredData.reduce((sum, p) => sum + p.tourCount, 0)
               
               return (
@@ -428,9 +598,19 @@ export function PeriodDataView() {
                       <DollarSign className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                      <div className="text-2xl font-bold text-green-600">{formatCurrency(totalRevenue, "TRY")}</div>
+                      <div className="text-lg font-bold text-green-600">
+                        {Object.keys(totalIncomeByCurrency).length > 0 ? (
+                          Object.entries(totalIncomeByCurrency).map(([currency, amount]) => (
+                            <div key={`income-${currency}`} className="mb-1">
+                              {formatCurrency(amount, currency)}
+                            </div>
+                          ))
+                        ) : (
+                          <div>{formatCurrency(0, "TRY")}</div>
+                        )}
+                      </div>
                       <p className="text-xs text-muted-foreground">
-                        {filteredData.length} dönem toplamı (TRY)
+                        {filteredData.length} dönem toplamı
                       </p>
                     </CardContent>
                   </Card>
@@ -441,24 +621,41 @@ export function PeriodDataView() {
                       <Building className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                      <div className="text-2xl font-bold text-red-600">{formatCurrency(totalExpenses, "TRY")}</div>
+                      <div className="text-lg font-bold text-red-600">
+                        {Object.keys(totalExpensesByCurrency).length > 0 ? (
+                          Object.entries(totalExpensesByCurrency).map(([currency, amount]) => (
+                            <div key={`expense-${currency}`} className="mb-1">
+                              {formatCurrency(amount, currency)}
+                            </div>
+                          ))
+                        ) : (
+                          <div>{formatCurrency(0, "TRY")}</div>
+                        )}
+                      </div>
                       <p className="text-xs text-muted-foreground">
-                        Şirket + Tur giderleri (TRY)
+                        Şirket + Tur giderleri
                       </p>
                     </CardContent>
                   </Card>
                   
                   <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium">Net Kar</CardTitle>
-                      {totalProfit > 0 ? <TrendingUp className="h-4 w-4 text-green-500" /> : <TrendingDown className="h-4 w-4 text-red-500" />}
+                      <CardTitle className="text-sm font-medium">Net Kar/Zarar</CardTitle>
+                      <TrendingUp className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                      <div className={`text-2xl font-bold ${getProfitColor(totalProfit)}`}>
-                        {formatCurrency(totalProfit, "TRY")}
+                      <div className="text-lg font-bold">                        {Object.keys(netProfitByCurrency).length > 0 ? (
+                          Object.entries(netProfitByCurrency).map(([currency, profit]) => (
+                            <div key={`profit-${currency}`} className={`mb-1 ${getProfitColor(profit)}`}>
+                              {formatCurrency(profit, currency)}
+                            </div>
+                          ))
+                        ) : (
+                          <div className="text-gray-600">{formatCurrency(0, "TRY")}</div>
+                        )}
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        Kar marjı: %{totalRevenue > 0 ? ((totalProfit / totalRevenue) * 100).toFixed(1) : '0'}
+                        Para birimi bazlı kar/zarar
                       </p>
                     </CardContent>
                   </Card>
@@ -471,12 +668,13 @@ export function PeriodDataView() {
                     <CardContent>
                       <div className="text-2xl font-bold text-blue-600">{totalTours}</div>
                       <p className="text-xs text-muted-foreground">
-                        Tur başına ort.: {totalTours > 0 ? formatCurrency(totalRevenue / totalTours) : '₺0'}
+                        Toplam {totalTours} tur
                       </p>
                     </CardContent>
                   </Card>
                 </>
-              )            })()}
+              );
+            })()}
           </div>
           {/* Alttaki tekrarlayan Dönem Verilerini Yenile butonu kaldırıldı */}
         </>
@@ -498,7 +696,8 @@ export function PeriodDataView() {
 
           {/* Monthly View */}
           <TabsContent value="monthly" className="space-y-6">
-            <Card>              <CardHeader>
+            <Card>
+              <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Calendar className="h-5 w-5" />
                   Aylık Mali Performans Detayları
@@ -507,91 +706,129 @@ export function PeriodDataView() {
                   Farklı para birimlerindeki gelir/giderler orijinal para birimleriyle gösterilir. Net kar/zarar TRY cinsinden hesaplanır.
                 </p>
               </CardHeader>              <CardContent>
-                <div className="rounded-md border">
-                  <Table>
+                <div className="rounded-md border overflow-x-auto">
+                  <Table className="w-full">
                     <TableHeader>
-                      <TableRow>
-                        <TableHead className="font-semibold">Dönem</TableHead>
-                        <TableHead className="font-semibold">Finansal Gelir</TableHead>
-                        <TableHead className="font-semibold">Tur Geliri</TableHead>
-                        <TableHead className="font-semibold">Şirket Giderleri</TableHead>
-                        <TableHead className="font-semibold">Tur Giderleri</TableHead>
-                        <TableHead className="font-semibold">Net Kar/Zarar</TableHead>
-                        <TableHead className="font-semibold">Kar Marjı</TableHead>
-                        <TableHead className="font-semibold">Tur Sayısı</TableHead>
-                        <TableHead className="font-semibold">Müşteri Sayısı</TableHead>
-                        <TableHead className="font-semibold">Durum</TableHead>
-                        <TableHead className="font-semibold">İşlemler</TableHead>
+                      <TableRow className="h-16 bg-gray-50">
+                        <TableHead className="text-center font-bold text-sm w-24 border-r p-4">Dönem</TableHead>
+                        <TableHead className="text-center font-bold text-sm w-32 border-r p-4">Finansal Gelir</TableHead>
+                        <TableHead className="text-center font-bold text-sm w-32 border-r p-4">Tur Geliri</TableHead>
+                        <TableHead className="text-center font-bold text-sm w-32 border-r p-4">Şirket Giderleri</TableHead>
+                        <TableHead className="text-center font-bold text-sm w-32 border-r p-4">Tur Giderleri</TableHead>
+                        <TableHead className="text-center font-bold text-sm w-36 border-r p-4">Net Kar/Zarar</TableHead>
+                        <TableHead className="text-center font-bold text-sm w-24 border-r p-4">Kar Marjı</TableHead>
+                        <TableHead className="text-center font-bold text-sm w-24 border-r p-4">Tur Sayısı</TableHead>
+                        <TableHead className="text-center font-bold text-sm w-28 border-r p-4">Müşteri Sayısı</TableHead>
+                        <TableHead className="text-center font-bold text-sm w-20 border-r p-4">Durum</TableHead>
+                        <TableHead className="text-center font-bold text-sm w-20 p-4">İşlemler</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {getMonthlyData().map((period) => {
                         const netProfit = calculateNetProfit(period)
+                        const netProfitByCurrency = calculateNetProfitByCurrency(period)
                         const profitMargin = calculateProfitMargin(period)
                         
                         return (
-                          <TableRow key={period.id} className="hover:bg-muted/50">
-                            <TableCell className="font-medium">{getMonthName(period.month)} {period.year}</TableCell>
-                            <TableCell className="text-green-700 font-medium">
-                              {period.financialIncomeByCurrency && period.financialIncomeByCurrency.length > 0 ? (
-                                period.financialIncomeByCurrency.map((group, idx) => (
-                                  <div key={idx} className="mb-1">{formatCurrency(group.amount, group.currency)}</div>
-                                ))
-                              ) : (
-                                formatCurrency(period.financialIncome, period.financialIncomeCurrency || 'TRY')
-                              )}
+                          <TableRow key={period.id} className="hover:bg-muted/50 h-16">
+                            <TableCell className="text-center p-4 border-r">
+                              <div className="font-semibold text-sm">{getMonthName(period.month)}</div>
+                              <div className="text-xs text-muted-foreground">{period.year}</div>
                             </TableCell>
-                            <TableCell className="text-blue-700 font-medium">
-                              {period.tourIncomeByCurrency && period.tourIncomeByCurrency.length > 0 ? (
-                                period.tourIncomeByCurrency.map((group, idx) => (
-                                  <div key={idx} className="mb-1">{formatCurrency(group.amount, group.currency)}</div>
-                                ))
-                              ) : (
-                                formatCurrency(period.tourIncome, period.tourIncomeCurrency || 'TRY')
-                              )}
-                            </TableCell>
-                            <TableCell className="text-red-700 font-medium">
-                              {period.companyExpensesByCurrency && period.companyExpensesByCurrency.length > 0 ? (
-                                period.companyExpensesByCurrency.map((group, idx) => (
-                                  <div key={idx} className="mb-1">{formatCurrency(group.amount, group.currency)}</div>
-                                ))
-                              ) : (
-                                formatCurrency(period.companyExpenses, period.companyExpensesCurrency || 'TRY')
-                              )}
-                            </TableCell>
-                            <TableCell className="text-orange-700 font-medium">
-                              {period.tourExpensesByCurrency && period.tourExpensesByCurrency.length > 0 ? (
-                                period.tourExpensesByCurrency.map((group, idx) => (
-                                  <div key={idx} className="mb-1">{formatCurrency(group.amount, group.currency)}</div>
-                                ))
-                              ) : (
-                                formatCurrency(period.tourExpenses, period.tourExpensesCurrency || 'TRY')
-                              )}
-                            </TableCell>
-                            <TableCell className={`font-bold ${getProfitColor(netProfit)}`}>
-                              <div className="flex items-center gap-1">
-                                {netProfit > 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
-                                {formatCurrency(netProfit, 'TRY')}
+                            <TableCell className="text-right p-4 border-r">
+                              <div className="text-green-700 font-medium">
+                                {period.financialIncomeByCurrency && period.financialIncomeByCurrency.length > 0 ? (
+                                  period.financialIncomeByCurrency.map((group, idx) => (
+                                    <div key={idx} className="text-sm">{formatCurrency(group.amount, group.currency)}</div>
+                                  ))
+                                ) : (
+                                  <div className="text-sm">{formatCurrency(period.financialIncome, period.financialIncomeCurrency || 'TRY')}</div>
+                                )}
                               </div>
                             </TableCell>
-                            <TableCell className={`font-medium ${getProfitColor(netProfit)}`}>%{profitMargin.toFixed(1)}</TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-1">
+                            <TableCell className="text-right p-4 border-r">
+                              <div className="text-blue-700 font-medium">
+                                {period.tourIncomeByCurrency && period.tourIncomeByCurrency.length > 0 ? (
+                                  period.tourIncomeByCurrency.map((group, idx) => (
+                                    <div key={idx} className="text-sm">{formatCurrency(group.amount, group.currency)}</div>
+                                  ))
+                                ) : (
+                                  <div className="text-sm">{formatCurrency(period.tourIncome, period.tourIncomeCurrency || 'TRY')}</div>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right p-4 border-r">
+                              <div className="text-red-700 font-medium">
+                                {period.companyExpensesByCurrency && period.companyExpensesByCurrency.length > 0 ? (
+                                  period.companyExpensesByCurrency.map((group, idx) => (
+                                    <div key={idx} className="text-sm">{formatCurrency(group.amount, group.currency)}</div>
+                                  ))
+                                ) : (
+                                  <div className="text-sm">{formatCurrency(period.companyExpenses, period.companyExpensesCurrency || 'TRY')}</div>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right p-4 border-r">
+                              <div className="text-orange-700 font-medium">
+                                {period.tourExpensesByCurrency && period.tourExpensesByCurrency.length > 0 ? (
+                                  period.tourExpensesByCurrency.map((group, idx) => (
+                                    <div key={idx} className="text-sm">{formatCurrency(group.amount, group.currency)}</div>
+                                  ))
+                                ) : (
+                                  <div className="text-sm">{formatCurrency(period.tourExpenses, period.tourExpensesCurrency || 'TRY')}</div>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right p-4 border-r">
+                              <div className="font-bold">
+                                {Object.keys(netProfitByCurrency).length > 0 ? (
+                                  Object.entries(netProfitByCurrency).map(([currency, profit]) => (
+                                    <div key={`profit-${currency}`} className={`flex items-center justify-end gap-2 text-sm ${getProfitColor(profit)}`}>
+                                      {profit > 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+                                      {formatCurrency(profit, currency)}
+                                    </div>
+                                  ))
+                                ) : (
+                                  <div className="flex items-center justify-end gap-2 text-sm text-gray-600">
+                                    <TrendingDown className="h-4 w-4" />
+                                    {formatCurrency(0, 'TRY')}
+                                  </div>
+                                )}                              </div>
+                            </TableCell>
+                            <TableCell className="text-center p-4 border-r">
+                              <div className="font-medium">
+                                {(() => {
+                                  const profitMarginByCurrency = calculateProfitMarginByCurrency(period);
+                                  return Object.keys(profitMarginByCurrency).length > 0 ? (
+                                    Object.entries(profitMarginByCurrency).map(([currency, margin]) => (
+                                      <div key={`margin-${currency}`} className={`text-sm ${getProfitColor(margin)}`}>
+                                        %{margin.toFixed(1)}
+                                      </div>
+                                    ))
+                                  ) : (
+                                    <div className="text-sm text-gray-600">%0.0</div>
+                                  );
+                                })()}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-center p-4 border-r">
+                              <div className="flex items-center justify-center gap-2">
                                 <Plane className="h-4 w-4 text-blue-500" />
-                                <span className="font-medium">{period.tourCount}</span>
+                                <span className="font-medium text-sm">{period.tourCount}</span>
                               </div>
                             </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-1">
+                            <TableCell className="text-center p-4 border-r">
+                              <div className="flex items-center justify-center gap-2">
                                 <Users className="h-4 w-4 text-green-500" />
-                                <span className="font-medium">{period.customerCount}</span>
-                              </div>                            </TableCell>
-                            <TableCell>
-                              <Badge variant={period.status === "active" ? "default" : "secondary"}>
-                                {period.status === "active" ? "Aktif Dönem" : "Kapalı Dönem"}
+                                <span className="font-medium text-sm">{period.customerCount}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-center p-4 border-r">
+                              <Badge variant={period.status === "active" ? "default" : "secondary"} className="text-xs">
+                                {period.status === "active" ? "Aktif" : "Kapalı"}
                               </Badge>
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="text-center p-4">
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -610,78 +847,140 @@ export function PeriodDataView() {
                 </div>
               </CardContent>
             </Card>
-          </TabsContent>          {/* Yearly View */}          <TabsContent value="yearly" className="space-y-6">
+          </TabsContent>
+          {/* Yearly View */}
+          <TabsContent value="yearly" className="space-y-6">
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+              <CardHeader>                <CardTitle className="flex items-center gap-2">
                   <TrendingUp className="h-5 w-5" />
                   Yıllık Mali Performans Özeti
                 </CardTitle>
                 <p className="text-xs text-muted-foreground mt-1">
                   Farklı para birimlerindeki gelir/giderler orijinal para birimleriyle gösterilir. Net kar/zarar TRY cinsinden hesaplanır.
                 </p>
-              </CardHeader>              <CardContent>
-                <div className="rounded-md border">
-                  <Table>
+              </CardHeader>
+              <CardContent>
+                <div className="rounded-md border overflow-x-auto">
+                  <Table className="w-full table-fixed">
                     <TableHeader>
-                      <TableRow>
-                        <TableHead className="font-semibold">Yıl</TableHead>
-                        <TableHead className="font-semibold">Finansal Gelir</TableHead>
-                        <TableHead className="font-semibold">Tur Geliri</TableHead>
-                        <TableHead className="font-semibold">Şirket Giderleri</TableHead>
-                        <TableHead className="font-semibold">Tur Giderleri</TableHead>
-                        <TableHead className="font-semibold">Net Yıllık Kar</TableHead>
-                        <TableHead className="font-semibold">Toplam Tur</TableHead>
-                        <TableHead className="font-semibold">Toplam Müşteri</TableHead>
-                        <TableHead className="font-semibold">Tur Başına Ort.</TableHead>
-                        <TableHead className="font-semibold">Müşteri Başına Ort.</TableHead>
-                        <TableHead className="font-semibold">İşlemler</TableHead>
+                      <TableRow className="h-16 bg-gray-50">
+                        <TableHead className="text-center font-bold text-sm w-20 border-r p-4">Yıl</TableHead>
+                        <TableHead className="text-center font-bold text-sm w-32 border-r p-4">Finansal Gelir</TableHead>
+                        <TableHead className="text-center font-bold text-sm w-32 border-r p-4">Tur Geliri</TableHead>
+                        <TableHead className="text-center font-bold text-sm w-32 border-r p-4">Şirket Giderleri</TableHead>
+                        <TableHead className="text-center font-bold text-sm w-32 border-r p-4">Tur Giderleri</TableHead>
+                        <TableHead className="text-center font-bold text-sm w-36 border-r p-4">Net Yıllık Kar</TableHead>
+                        <TableHead className="text-center font-bold text-sm w-24 border-r p-4">Toplam Tur</TableHead>
+                        <TableHead className="text-center font-bold text-sm w-28 border-r p-4">Toplam Müşteri</TableHead>
+                        <TableHead className="text-center font-bold text-sm w-20 p-4">İşlemler</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {getYearlyData().map((yearData) => (
-                        <TableRow key={yearData.year} className="hover:bg-muted/50">
-                          <TableCell className="font-bold text-lg">{yearData.year}</TableCell>
-                          <TableCell className="text-green-700 font-medium">
-                            {yearData.financialIncomeByCurrency.map((group, idx) => (
-                              <div key={idx} className="mb-1">{formatCurrency(group.amount, group.currency)}</div>
-                            ))}
+                        <TableRow key={yearData.year} className="hover:bg-muted/50 h-16">
+                          <TableCell className="text-center p-4 border-r">
+                            <div className="font-bold text-lg">{yearData.year}</div>
                           </TableCell>
-                          <TableCell className="text-blue-700 font-medium">
-                            {yearData.tourIncomeByCurrency.map((group, idx) => (
-                              <div key={idx} className="mb-1">{formatCurrency(group.amount, group.currency)}</div>
-                            ))}
-                          </TableCell>
-                          <TableCell className="text-red-700 font-medium">
-                            {yearData.companyExpensesByCurrency.map((group, idx) => (
-                              <div key={idx} className="mb-1">{formatCurrency(group.amount, group.currency)}</div>
-                            ))}
-                          </TableCell>
-                          <TableCell className="text-orange-700 font-medium">
-                            {yearData.tourExpensesByCurrency.map((group, idx) => (
-                              <div key={idx} className="mb-1">{formatCurrency(group.amount, group.currency)}</div>
-                            ))}
-                          </TableCell>
-                          <TableCell className={`font-bold ${getProfitColor(yearData.totalNetProfit)}`}>
-                            <div className="flex items-center gap-1">
-                              {yearData.totalNetProfit > 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
-                              {formatCurrency(yearData.totalNetProfit, "TRY")}
+                          <TableCell className="text-right p-4 border-r">
+                            <div className="text-green-700 font-medium">
+                              {yearData.financialIncomeByCurrency.length > 0 ? (
+                                yearData.financialIncomeByCurrency.map((group, idx) => (
+                                  <div key={idx} className="text-sm">{formatCurrency(group.amount, group.currency)}</div>
+                                ))
+                              ) : (
+                                <div className="text-sm text-gray-500">-</div>
+                              )}
                             </div>
                           </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-1">
+                          <TableCell className="text-right p-4 border-r">
+                            <div className="text-blue-700 font-medium">
+                              {yearData.tourIncomeByCurrency.length > 0 ? (
+                                yearData.tourIncomeByCurrency.map((group, idx) => (
+                                  <div key={idx} className="text-sm">{formatCurrency(group.amount, group.currency)}</div>
+                                ))
+                              ) : (
+                                <div className="text-sm text-gray-500">-</div>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right p-4 border-r">
+                            <div className="text-red-700 font-medium">
+                              {yearData.companyExpensesByCurrency.length > 0 ? (
+                                yearData.companyExpensesByCurrency.map((group, idx) => (
+                                  <div key={idx} className="text-sm">{formatCurrency(group.amount, group.currency)}</div>
+                                ))
+                              ) : (
+                                <div className="text-sm text-gray-500">-</div>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right p-4 border-r">
+                            <div className="text-orange-700 font-medium">
+                              {yearData.tourExpensesByCurrency.length > 0 ? (
+                                yearData.tourExpensesByCurrency.map((group, idx) => (
+                                  <div key={idx} className="text-sm">{formatCurrency(group.amount, group.currency)}</div>
+                                ))
+                              ) : (
+                                <div className="text-sm text-gray-500">-</div>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right p-4 border-r">
+                            <div className="font-bold">
+                              {(() => {
+                                // Para birimi bazlı net kar/zarar hesapla
+                                const netProfitByCurrency: Record<string, number> = {};
+                                
+                                // Tüm para birimlerini topla
+                                const allCurrencies = new Set<string>();
+                                yearData.financialIncomeByCurrency.forEach(group => allCurrencies.add(group.currency));
+                                yearData.tourIncomeByCurrency.forEach(group => allCurrencies.add(group.currency));
+                                yearData.companyExpensesByCurrency.forEach(group => allCurrencies.add(group.currency));
+                                yearData.tourExpensesByCurrency.forEach(group => allCurrencies.add(group.currency));
+                                
+                                // Her para birimi için kar/zarar hesapla
+                                allCurrencies.forEach(currency => {
+                                  const income = 
+                                    (yearData.financialIncomeByCurrency.find(g => g.currency === currency)?.amount || 0) +
+                                    (yearData.tourIncomeByCurrency.find(g => g.currency === currency)?.amount || 0);
+                                  const expenses = 
+                                    (yearData.companyExpensesByCurrency.find(g => g.currency === currency)?.amount || 0) +
+                                    (yearData.tourExpensesByCurrency.find(g => g.currency === currency)?.amount || 0);
+                                  
+                                  if (income > 0 || expenses > 0) {
+                                    netProfitByCurrency[currency] = income - expenses;
+                                  }
+                                });
+                                
+                                return Object.keys(netProfitByCurrency).length > 0 ? (
+                                  Object.entries(netProfitByCurrency).map(([currency, profit]) => (
+                                    <div key={`yearly-profit-${currency}`} className={`flex items-center justify-end gap-2 text-sm ${getProfitColor(profit)}`}>
+                                      {profit > 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+                                      {formatCurrency(profit, currency)}
+                                    </div>
+                                  ))
+                                ) : (
+                                  <div className="flex items-center justify-end gap-2 text-sm text-gray-600">
+                                    <TrendingDown className="h-4 w-4" />
+                                    {formatCurrency(0, 'TRY')}
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-center p-4 border-r">
+                            <div className="flex items-center justify-center gap-2">
                               <Plane className="h-4 w-4 text-blue-500" />
-                              <span className="font-bold">{yearData.totalTours}</span>
+                              <span className="font-medium text-sm">{yearData.totalTours}</span>
                             </div>
                           </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-1">
+                          <TableCell className="text-center p-4 border-r">
+                            <div className="flex items-center justify-center gap-2">
                               <Users className="h-4 w-4 text-green-500" />
-                              <span className="font-bold">{yearData.totalCustomers}</span>                            </div>
+                              <span className="font-medium text-sm">{yearData.totalCustomers}</span>
+                            </div>
                           </TableCell>
-                          <TableCell className="font-medium text-blue-600">{formatCurrency(yearData.averageRevenuePerTour, "TRY")}</TableCell>
-                          <TableCell className="font-medium text-green-600">{formatCurrency(yearData.averageRevenuePerCustomer, "TRY")}</TableCell>
-                          <TableCell>
+                          <TableCell className="text-center p-4">
                             <Button
                               variant="ghost"
                               size="sm"
@@ -699,7 +998,8 @@ export function PeriodDataView() {
                 </div>
               </CardContent>
             </Card>
-          </TabsContent>        </Tabs>
+          </TabsContent>
+        </Tabs>
       )}
 
       {/* Delete Confirmation Dialog */}

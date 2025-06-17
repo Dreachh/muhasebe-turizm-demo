@@ -1129,7 +1129,7 @@ export function DataView({
             <Table>
               <TableBody>
                 <TableRow><TableHead>Seri No</TableHead><TableCell>{tour.serialNumber || '-'}</TableCell></TableRow>
-                <TableRow><TableHead>Tur Kaydını Oluşturan Kişi</TableHead><TableCell className="font-medium">{tour.tourName || '-'}</TableCell></TableRow>
+                <TableRow><TableHead>Müşteri</TableHead><TableCell className="font-medium">{tour.tourName || '-'}</TableCell></TableRow>
                 <TableRow><TableHead>Başlangıç Tarihi</TableHead><TableCell>{formatDate(tour.tourDate)}</TableCell></TableRow>
                 <TableRow><TableHead>Bitiş Tarihi</TableHead><TableCell>{formatDate(tour.tourEndDate)}</TableCell></TableRow>
                 <TableRow><TableHead>Kişi Sayısı</TableHead><TableCell>{numberOfPeople}</TableCell></TableRow>
@@ -1586,11 +1586,10 @@ export function DataView({
                     <TableHead 
                       className="font-bold whitespace-nowrap cursor-pointer hover:bg-gray-100 bg-gray-200"
                       onClick={() => handleSortChange("serialNumber")}
-                    >
-                      Seri No {sortField === "serialNumber" && (sortDirection === "asc" ? <span className="text-blue-600">▲</span> : <span className="text-blue-600">▼</span>)}
+                    >                      Seri No {sortField === "serialNumber" && (sortDirection === "asc" ? <span className="text-blue-600">▲</span> : <span className="text-blue-600">▼</span>)}
                     </TableHead>
-                    <TableHead>Tur Kaydını Oluşturan Kişi</TableHead>
-                    <TableHead 
+                    <TableHead>Tur Kaydını Oluşturan</TableHead>
+                    <TableHead
                       className="font-bold cursor-pointer hover:bg-gray-100 bg-gray-200"
                       onClick={() => handleSortChange("customerName")}
                     >
@@ -1611,7 +1610,7 @@ export function DataView({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                                   {filteredToursData.length > 0 ? (
+                  {filteredToursData.length > 0 ? (
                     filteredToursData.map((tour) => (
                       <TableRow key={tour.id}>
                         <TableCell>{tour.serialNumber || '-'}</TableCell>
@@ -1770,6 +1769,33 @@ export function DataView({
                             })()
                           )}
                         </TableCell>
+                        <TableCell className="text-right whitespace-nowrap">
+                          {(() => {
+                            // Kazanç hesaplaması 
+                            const profit = calculateTourProfit(tour);
+                            
+                            return (
+                              <div className="flex flex-col">
+                                {Object.entries(profit).length > 0 ? (
+                                  <>
+                                    <span className="font-semibold text-green-600">Kar:</span>
+                                    {Object.entries(profit).map(([currency, amount], idx) => (
+                                      <span 
+                                        key={`profit-${idx}`} 
+                                        className={amount >= 0 ? "text-green-600" : "text-red-600"}
+                                        dangerouslySetInnerHTML={{ 
+                                          __html: formatCurrency(amount, currency) 
+                                        }}
+                                      />
+                                    ))}
+                                  </>
+                                ) : (
+                                  '-'
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
                             <Button
@@ -1811,25 +1837,20 @@ export function DataView({
               </Table>
             </div>
           </TabsContent>
-          
-          <TabsContent value="financial">
-            {/* Alt kategoriler için içerideki Tabs bileşeni */}
-            <Tabs defaultValue="income" className="mb-4">              <TabsList className="mb-2 bg-gray-100">
+            <TabsContent value="financial">
+            <Tabs defaultValue="income" className="mb-4">
+              <TabsList className="mb-2 bg-gray-100">
                 <TabsTrigger value="income">Finansal Gelir</TabsTrigger>
                 <TabsTrigger value="expense">Şirket Giderleri</TabsTrigger>
                 <TabsTrigger value="tourExpense">Tur Giderleri</TabsTrigger>
               </TabsList>
               
-              {/* Tüm Kayıtlar Sekmesi */}              {/* Finansal Gelir Sekmesi */}
-              <TabsContent value="income">
+              {/* Tüm Kayıtlar Sekmesi */}              {/* Finansal Gelir Sekmesi */}              <TabsContent value="income">
                 <div className="rounded-md border">
                   <Table className="w-full">
                     <TableHeader>
                       <TableRow className="bg-green-50">
-                        <TableHead 
-                          className="w-[100px] font-bold whitespace-nowrap cursor-pointer hover:bg-green-100"
-                          onClick={() => handleSortChange("serialNumber")}
-                        >
+                        <TableHead className="w-[100px] font-bold whitespace-nowrap cursor-pointer hover:bg-green-100" onClick={() => handleSortChange("serialNumber")}>
                           Tur Seri No {sortField === "serialNumber" && (sortDirection === "asc" ? "▲" : "▼")}
                         </TableHead>
                         <TableHead 
@@ -2028,12 +2049,12 @@ export function DataView({
                 </div>
               </TabsContent>
               
-              {/* Tur Giderleri Sekmesi */}
-              <TabsContent value="tourExpense">
+              {/* Tur Giderleri Sekmesi */}              <TabsContent value="tourExpense">
                 <div className="rounded-md border">
                   <Table className="w-full">
                     <TableHeader>
-                      <TableRow className="bg-indigo-50">                        <TableHead 
+                      <TableRow className="bg-indigo-50">
+                        <TableHead 
                           className={`w-[100px] font-bold whitespace-nowrap cursor-pointer hover:bg-indigo-100 ${sortField === "serialNumber" ? "bg-indigo-300" : "bg-indigo-200"}`}
                           onClick={() => handleSortChange("serialNumber")}
                         >
@@ -2059,10 +2080,12 @@ export function DataView({
                         >
                           Tutar {sortField === "amount" && (sortDirection === "asc" ? <span className="text-blue-800">▲</span> : <span className="text-blue-800">▼</span>)}
                         </TableHead>
-                        <TableHead className="w-[100px] text-right font-bold">İşlemler</TableHead>                      </TableRow>
+                        <TableHead className="w-[100px] text-right font-bold">İşlemler</TableHead>
+                      </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {(() => {                        // Sadece turların kendi içindeki giderleri kullanalım (tek veri kaynağı)
+                      {(() => {
+                        // Sadece turların kendi içindeki giderleri kullanalım (tek veri kaynağı)
                         // Mükerrer gider sorunundan kaçınmak için ilişkili tour.expenses dizisinden giderleri alalım
                         const allTourExpenses = toursData.reduce((acc: any[], tour) => {
                           // Her turun giderleri olup olmadığını kontrol edelim
@@ -2093,14 +2116,16 @@ export function DataView({
                             acc.push(...expenses);
                           }
                           return acc;
-                        }, []);if (allTourExpenses.length === 0) {
+                        }, []);
+                        
+                        if (allTourExpenses.length === 0) {
                           return (
                             <TableRow>
                               <TableCell colSpan={7} className="h-24 text-center">Tur gideri kaydı bulunamadı.</TableCell>
-                            </TableRow>
-                          );
+                            </TableRow>                          );
                         }
-                            // Önce ana sıralama kriterlerine göre tüm giderleri sıralayalım
+                        
+                        // Önce ana sıralama kriterlerine göre tüm giderleri sıralayalım
                         // Bu, sayfalar arası tutarlı bir sıralama sağlar
                         const sortedAllExpenses = [...allTourExpenses].sort((a, b) => {
                           if (sortField === "serialNumber") {

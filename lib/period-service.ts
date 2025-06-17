@@ -267,17 +267,45 @@ export async function recalculatePeriods() {
           profitInTRY: 0,
           status: determinePeriodStatus(year, month)
         };
-      }
+      }      processedPeriods[periodKey].tourCount += 1;
 
-      processedPeriods[periodKey].tourCount += 1;      // Tur gelirlerini hesapla
-      const tourAmount = Number(tour.totalPrice) || 0;
+      // Tur gelirlerini hesapla - Ana tur tutarı + aktiviteler
       const tourCurrency = tour.currency || 'TRY';
-      const tourAmountInTRY = convertToTRY(tourAmount, tourCurrency);
+      const tourAmount = Number(tour.totalPrice) || 0;
+      let totalTourIncome = 0;
       
-      // Para birimi grubuna ekle
-      addToCurrencyGroup(processedPeriods[periodKey].tourIncomeByCurrency, tourAmount, tourCurrency);
+      // Ana tur tutarını ekle
+      if (tourAmount > 0) {
+        addToCurrencyGroup(processedPeriods[periodKey].tourIncomeByCurrency, tourAmount, tourCurrency);
+        totalTourIncome += convertToTRY(tourAmount, tourCurrency);
+      }
+      
+      // Aktivitelerin toplamını da ekle (farklı para biriminde olanları ayrı ayrı göster)
+      if (Array.isArray(tour.activities)) {
+        tour.activities.forEach((act: any) => {
+          const actCurrency = act.currency || tourCurrency;
+          const actPrice = Number(act.price) || 0;
+          let actParticipants = 0;
+          
+          // Katılımcı sayısını doğru şekilde belirle
+          if (act.participantsType === 'all') {
+            actParticipants = Number(tour.numberOfPeople) || 0;
+          } else {
+            actParticipants = Number(act.participants) || 0;
+          }
+          
+          const activityTotal = actPrice * actParticipants;
+          if (activityTotal > 0) {
+            // Para birimi grubuna ekle
+            addToCurrencyGroup(processedPeriods[periodKey].tourIncomeByCurrency, activityTotal, actCurrency);
+            // TRY toplamına ekle
+            totalTourIncome += convertToTRY(activityTotal, actCurrency);
+          }
+        });
+      }
+      
       // TRY toplamını güncelle
-      processedPeriods[periodKey].totalIncomeInTRY = (processedPeriods[periodKey].totalIncomeInTRY || 0) + tourAmountInTRY;
+      processedPeriods[periodKey].totalIncomeInTRY = (processedPeriods[periodKey].totalIncomeInTRY || 0) + totalTourIncome;
       
       // Müşteri sayısını güncelle
       const numberOfPeople = Number(tour.numberOfPeople) || 0;
