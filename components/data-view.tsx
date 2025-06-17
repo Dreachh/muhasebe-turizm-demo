@@ -1611,7 +1611,7 @@ export function DataView({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredToursData.length > 0 ? (
+                                   {filteredToursData.length > 0 ? (
                     filteredToursData.map((tour) => (
                       <TableRow key={tour.id}>
                         <TableCell>{tour.serialNumber || '-'}</TableCell>
@@ -1769,33 +1769,6 @@ export function DataView({
                               }
                             })()
                           )}
-                        </TableCell>
-                        <TableCell className="text-right whitespace-nowrap">
-                          {(() => {
-                            // Kazanç hesaplaması 
-                            const profit = calculateTourProfit(tour);
-                            
-                            return (
-                              <div className="flex flex-col">
-                                {Object.entries(profit).length > 0 ? (
-                                  <>
-                                    <span className="font-semibold text-green-600">Kar:</span>
-                                    {Object.entries(profit).map(([currency, amount], idx) => (
-                                      <span 
-                                        key={`profit-${idx}`} 
-                                        className={amount >= 0 ? "text-green-600" : "text-red-600"}
-                                        dangerouslySetInnerHTML={{ 
-                                          __html: formatCurrency(amount, currency) 
-                                        }}
-                                      />
-                                    ))}
-                                  </>
-                                ) : (
-                                  '-'
-                                )}
-                              </div>
-                            );
-                          })()}
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
@@ -1988,7 +1961,9 @@ export function DataView({
                         </TableHead>
                         <TableHead className="w-[100px] text-right font-bold">İşlemler</TableHead>
                       </TableRow>
-                    </TableHeader>                    <TableBody>                      {filteredFinancialData.filter(item => item.type === 'expense' && !item.relatedTourId).length > 0 ? (
+                    </TableHeader>
+                    <TableBody>
+                      {filteredFinancialData.filter(item => item.type === 'expense' && !item.relatedTourId).length > 0 ? (
                         (() => {
                           return filteredFinancialData
                             .filter(item => item.type === 'expense' && !item.relatedTourId)
@@ -2070,7 +2045,7 @@ export function DataView({
                         >
                           Tarih {sortField === "date" && (sortDirection === "asc" ? <span className="text-blue-800">▲</span> : <span className="text-blue-800">▼</span>)}
                         </TableHead>
-                        <TableHead className="w-[150px] font-bold">Tur Kaydını Oluşturan Kişi</TableHead>
+                        <TableHead className="w-[150px] font-bold">Müşteri</TableHead>
                         <TableHead className="w-[150px] font-bold">Destinasyon</TableHead>
                         <TableHead 
                           className={`pl-4 font-bold cursor-pointer hover:bg-indigo-100 ${sortField === "description" ? "bg-indigo-300" : ""}`}
