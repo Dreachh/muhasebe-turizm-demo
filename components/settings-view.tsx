@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -32,7 +32,10 @@ import {
   getActivities,
   saveActivities,
   getDestinations,
-  saveDestinations,
+  saveDestinations,  getReservationSettings,
+  saveReservationSettings,
+  getNextSerialNumber,
+  updateSerialSettings,
 } from "@/lib/db"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
@@ -109,6 +112,25 @@ interface Tour {
   price: number;  // kişi başı fiyat
   duration: string;
   currency: string;
+}
+
+// Rezervasyon sistemleri için arayüzler
+interface PickupType {
+  id: string;
+  name: string;
+  description: string;
+}
+
+interface PaymentMethod {
+  id: string;
+  name: string;
+  description: string;
+}
+
+interface PaymentStatus {
+  id: string;
+  name: string;
+  color: string;
 }
 
 interface CompanyInfo {
@@ -239,7 +261,6 @@ export function SettingsView({
   const [isEditingDestination, setIsEditingDestination] = useState(false)
   const [isDeleteDestinationDialogOpen, setIsDeleteDestinationDialogOpen] = useState(false)
   const [destinationToDelete, setDestinationToDelete] = useState<Destination | null>(null)
-
   // Tur şablonları için state
   const [tourTemplates, setTourTemplates] = useState<Tour[]>([])
   const [newTourTemplate, setNewTourTemplate] = useState<Tour>({
@@ -257,12 +278,67 @@ export function SettingsView({
   const [isDeleteTourDialogOpen, setIsDeleteTourDialogOpen] = useState(false)
   const [tourToDelete, setTourToDelete] = useState<Tour | null>(null)
 
+
+  // Alış yeri türleri için state
+  const [pickupTypes, setPickupTypes] = useState<PickupType[]>([])
+  const [newPickupType, setNewPickupType] = useState<PickupType>({
+    id: "",
+    name: "",
+    description: "",
+  })
+  const [isPickupTypeDialogOpen, setIsPickupTypeDialogOpen] = useState(false)
+  const [isEditingPickupType, setIsEditingPickupType] = useState(false)
+
+
+  // Ödeme yöntemleri için state
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
+  const [newPaymentMethod, setNewPaymentMethod] = useState<PaymentMethod>({
+    id: "",
+    name: "",
+    description: "",
+  })
+  const [isPaymentMethodDialogOpen, setIsPaymentMethodDialogOpen] = useState(false)
+  const [isEditingPaymentMethod, setIsEditingPaymentMethod] = useState(false)
+
+  // Ödeme durumları için state
+  const [paymentStatuses, setPaymentStatuses] = useState<PaymentStatus[]>([])
+  const [newPaymentStatus, setNewPaymentStatus] = useState<PaymentStatus>({
+    id: "",
+    name: "",
+    color: "#10b981",
+  })
+  const [isPaymentStatusDialogOpen, setIsPaymentStatusDialogOpen] = useState(false)
+  const [isEditingPaymentStatus, setIsEditingPaymentStatus] = useState(false)
+
+  const [isEditingReferenceSource, setIsEditingReferenceSource] = useState(false)
+
+  // Seri numarası ayarları için state
+  const [serialSettings, setSerialSettings] = useState({
+    prefix: "REZ",
+    nextNumber: 1,
+    format: "REZ-{number}",
+    digits: 4,
+  })
   // Ayarları ve gider türlerini yükle
   useEffect(() => {
     const loadSettings = async () => {
       try {
         const settings = await getSettings()
         if (settings.companyInfo) setCompanyInfo(settings.companyInfo)
+        
+        // Seri numarası ayarlarını yükle
+        try {
+          const serialData = localStorage.getItem('serialSettings');
+          if (serialData) {
+            const parsedSerialSettings = JSON.parse(serialData);
+            setSerialSettings(prev => ({
+              ...prev,
+              ...parsedSerialSettings
+            }));
+          }
+        } catch (serialError) {
+          console.error("Seri numarası ayarları yüklenirken hata:", serialError);
+        }
       } catch (error) {
         console.error("Ayarlar yüklenirken hata:", error)
       }
@@ -664,14 +740,90 @@ export function SettingsView({
           }
         }
       }
-    };
-
-    loadSettings()
+    };    loadSettings()
     loadProviders()
     loadActivities()
     loadDestinations()
     loadTourTemplates()
+    loadReservationSettings()
   }, [])
+  
+  // Rezervasyon ayarlarını yükle
+  const loadReservationSettings = async () => {
+    try {
+      // Firebase'den mevcut ayarları yükle
+      const [pickupTypesData, paymentMethodsData, paymentStatusesData] = await Promise.all([
+        getReservationSettings('pickupTypes'),
+        getReservationSettings('paymentMethods'),
+        getReservationSettings('paymentStatuses')
+      ]);
+
+      // Alış yeri türleri
+      if (pickupTypesData && pickupTypesData.length > 0) {
+        setPickupTypes(pickupTypesData);
+      } else {
+        const defaultPickupTypes = [
+          { id: generateUUID(), name: "Otel", description: "Müşteri otelinden alış" },
+          { id: generateUUID(), name: "Acenta", description: "Acenta ofisinden alış" },
+          { id: generateUUID(), name: "Havalimanı", description: "Havalimanından alış" },
+          { id: generateUUID(), name: "Özel Adres", description: "Müşteri adresinden alış" },
+          { id: generateUUID(), name: "Buluşma Noktası", description: "Belirlenen noktada buluşma" }
+        ];
+        setPickupTypes(defaultPickupTypes);
+        await saveReservationSettings('pickupTypes', defaultPickupTypes);
+      }
+
+      // Ödeme yapanlar
+      if (paymentMethodsData && paymentMethodsData.length > 0) {
+        setPaymentMethods(paymentMethodsData);
+      } else {
+        const defaultPaymentMethods = [
+          { id: generateUUID(), name: "Aracı", description: "Aracı firma tarafından ödendi" },
+          { id: generateUUID(), name: "Müşteri", description: "Müşteri tarafından ödendi" },
+          { id: generateUUID(), name: "Otel", description: "Otel tarafından ödendi" },
+          { id: generateUUID(), name: "Nakit", description: "Nakit ödeme" }
+        ];
+        setPaymentMethods(defaultPaymentMethods);
+        await saveReservationSettings('paymentMethods', defaultPaymentMethods);
+      }
+
+      // Ödeme durumları
+      if (paymentStatusesData && paymentStatusesData.length > 0) {
+        setPaymentStatuses(paymentStatusesData);
+      } else {
+        const defaultPaymentStatuses = [
+          { id: generateUUID(), name: "Ödendi", color: "#10b981" },
+          { id: generateUUID(), name: "Bekliyor", color: "#f59e0b" },
+          { id: generateUUID(), name: "Kısmi Ödendi", color: "#3b82f6" },
+          { id: generateUUID(), name: "İptal", color: "#ef4444" }
+        ];
+        setPaymentStatuses(defaultPaymentStatuses);
+        await saveReservationSettings('paymentStatuses', defaultPaymentStatuses);
+      }
+
+      // Seri numarası ayarlarını yükle
+      try {
+        const nextNumber = await getNextSerialNumber();
+        if (nextNumber) {
+          // Mevcut seri numarasından ayarları çıkar
+          const match = nextNumber.match(/^([A-Z]+)-(\d+)$/);
+          if (match) {
+            setSerialSettings(prev => ({
+              ...prev,
+              prefix: match[1],
+              nextNumber: parseInt(match[2]),
+              format: `${match[1]}-{number}`
+            }));
+          }
+        }
+      } catch (error) {
+        console.error("Seri numarası ayarları yüklenirken hata:", error);
+      }
+
+    } catch (error) {
+      console.error("Rezervasyon ayarları yüklenirken hata:", error);
+    }
+  }
 
   const handleCompanyInfoChange = (e: InputChangeEvent) => {
     const { name, value } = e.target
@@ -1197,13 +1349,277 @@ export function SettingsView({
     }
   }
 
-  // Benzersiz gider türlerini al
-  const getUniqueExpenseTypes = () => {
-    const types = new Set(expenseTypes.map((item) => item.type))
-    return Array.from(types)
+  // =============== REZERVASYON AYARLARI CRUD FONKSİYONLARI ===============
+
+  // Alış Yeri Türü ekleme/düzenleme dialog'unu aç
+  const openPickupTypeDialog = (pickupType: PickupType | null = null) => {
+    if (pickupType) {
+      setNewPickupType(pickupType)
+      setIsEditingPickupType(true)
+    } else {
+      setNewPickupType({
+        id: generateUUID(),
+        name: "",
+        description: "",
+      })
+      setIsEditingPickupType(false)
+    }
+    setIsPickupTypeDialogOpen(true)
   }
 
-  // Gider kategorileri
+  // Alış Yeri Türü değişikliklerini işle
+  const handlePickupTypeChange = (e: InputChangeEvent) => {
+    const { name, value } = e.target
+    setNewPickupType((prev) => ({ ...prev, [name]: value }))
+  }
+
+  // Alış Yeri Türü kaydet
+  const handleSavePickupType = async () => {
+    if (!newPickupType.name) {
+      toast({
+        title: "Hata",
+        description: "Alış yeri türü adı zorunludur.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    let updatedPickupTypes
+    if (isEditingPickupType) {
+      updatedPickupTypes = pickupTypes.map((item) => (item.id === newPickupType.id ? newPickupType : item))
+    } else {
+      updatedPickupTypes = [...pickupTypes, newPickupType]
+    }
+
+    setPickupTypes(updatedPickupTypes)
+    setIsPickupTypeDialogOpen(false)
+
+    try {
+      await saveReservationSettings('pickupTypes', updatedPickupTypes)
+      toast({
+        title: "Başarılı",
+        description: isEditingPickupType ? "Alış yeri türü güncellendi." : "Yeni alış yeri türü eklendi.",
+      })
+    } catch (error) {
+      console.error("Alış yeri türleri kaydedilirken hata:", error)
+      toast({
+        title: "Hata",
+        description: "Alış yeri türleri kaydedilirken bir hata oluştu.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Alış Yeri Türü sil
+  const handleDeletePickupType = async (pickupType: PickupType) => {
+    const updatedPickupTypes = pickupTypes.filter((item) => item.id !== pickupType.id)
+    setPickupTypes(updatedPickupTypes)
+
+    try {
+      await saveReservationSettings('pickupTypes', updatedPickupTypes)
+      toast({
+        title: "Başarılı",
+        description: "Alış yeri türü silindi.",
+      })
+    } catch (error) {
+      console.error("Alış yeri türleri kaydedilirken hata:", error)
+      toast({
+        title: "Hata",
+        description: "Alış yeri türleri kaydedilirken bir hata oluştu.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Ödeme Yöntemi ekleme/düzenleme dialog'unu aç
+  const openPaymentMethodDialog = (paymentMethod: PaymentMethod | null = null) => {
+    if (paymentMethod) {
+      setNewPaymentMethod(paymentMethod)
+      setIsEditingPaymentMethod(true)
+    } else {
+      setNewPaymentMethod({
+        id: generateUUID(),
+        name: "",
+        description: "",
+      })
+      setIsEditingPaymentMethod(false)
+    }
+    setIsPaymentMethodDialogOpen(true)
+  }
+
+  // Ödeme Yöntemi değişikliklerini işle
+  const handlePaymentMethodChange = (e: InputChangeEvent) => {
+    const { name, value } = e.target
+    setNewPaymentMethod((prev) => ({ ...prev, [name]: value }))
+  }
+
+  // Ödeme Yöntemi kaydet
+  const handleSavePaymentMethod = async () => {
+    if (!newPaymentMethod.name) {
+      toast({
+        title: "Hata",
+        description: "Ödeme yöntemi adı zorunludur.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    let updatedPaymentMethods
+    if (isEditingPaymentMethod) {
+      updatedPaymentMethods = paymentMethods.map((item) => (item.id === newPaymentMethod.id ? newPaymentMethod : item))
+    } else {
+      updatedPaymentMethods = [...paymentMethods, newPaymentMethod]
+    }
+
+    setPaymentMethods(updatedPaymentMethods)
+    setIsPaymentMethodDialogOpen(false)
+
+    try {
+      await saveReservationSettings('paymentMethods', updatedPaymentMethods)
+      toast({
+        title: "Başarılı",
+        description: isEditingPaymentMethod ? "Ödeme yöntemi güncellendi." : "Yeni ödeme yöntemi eklendi.",
+      })
+    } catch (error) {
+      console.error("Ödeme yöntemleri kaydedilirken hata:", error)
+      toast({
+        title: "Hata",
+        description: "Ödeme yöntemleri kaydedilirken bir hata oluştu.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Ödeme Yöntemi sil
+  const handleDeletePaymentMethod = async (paymentMethod: PaymentMethod) => {
+    const updatedPaymentMethods = paymentMethods.filter((item) => item.id !== paymentMethod.id)
+    setPaymentMethods(updatedPaymentMethods)
+
+    try {
+      await saveReservationSettings('paymentMethods', updatedPaymentMethods)
+      toast({
+        title: "Başarılı",
+        description: "Ödeme yöntemi silindi.",
+      })
+    } catch (error) {
+      console.error("Ödeme yöntemleri kaydedilirken hata:", error)
+      toast({
+        title: "Hata",
+        description: "Ödeme yöntemleri kaydedilirken bir hata oluştu.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Ödeme Durumu ekleme/düzenleme dialog'unu aç
+  const openPaymentStatusDialog = (paymentStatus: PaymentStatus | null = null) => {
+    if (paymentStatus) {
+      setNewPaymentStatus(paymentStatus)
+      setIsEditingPaymentStatus(true)
+    } else {
+      setNewPaymentStatus({
+        id: generateUUID(),
+        name: "",
+        color: "#10b981",
+      })
+      setIsEditingPaymentStatus(false)
+    }
+    setIsPaymentStatusDialogOpen(true)
+  }
+
+  // Ödeme Durumu değişikliklerini işle
+  const handlePaymentStatusChange = (e: InputChangeEvent) => {
+    const { name, value } = e.target
+    setNewPaymentStatus((prev) => ({ ...prev, [name]: value }))
+  }
+
+  // Ödeme Durumu kaydet
+  const handleSavePaymentStatus = async () => {
+    if (!newPaymentStatus.name) {
+      toast({
+        title: "Hata",
+        description: "Ödeme durumu adı zorunludur.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    let updatedPaymentStatuses
+    if (isEditingPaymentStatus) {
+      updatedPaymentStatuses = paymentStatuses.map((item) => (item.id === newPaymentStatus.id ? newPaymentStatus : item))
+    } else {
+      updatedPaymentStatuses = [...paymentStatuses, newPaymentStatus]
+    }
+
+    setPaymentStatuses(updatedPaymentStatuses)
+    setIsPaymentStatusDialogOpen(false)
+
+    try {
+      await saveReservationSettings('paymentStatuses', updatedPaymentStatuses)
+      toast({
+        title: "Başarılı",
+        description: isEditingPaymentStatus ? "Ödeme durumu güncellendi." : "Yeni ödeme durumu eklendi.",
+      })
+    } catch (error) {
+      console.error("Ödeme durumları kaydedilirken hata:", error)
+      toast({
+        title: "Hata",
+        description: "Ödeme durumları kaydedilirken bir hata oluştu.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Ödeme Durumu sil
+  const handleDeletePaymentStatus = async (paymentStatus: PaymentStatus) => {
+    const updatedPaymentStatuses = paymentStatuses.filter((item) => item.id !== paymentStatus.id)
+    setPaymentStatuses(updatedPaymentStatuses)
+
+    try {
+      await saveReservationSettings('paymentStatuses', updatedPaymentStatuses)
+      toast({
+        title: "Başarılı",
+        description: "Ödeme durumu silindi.",
+      })
+    } catch (error) {
+      console.error("Ödeme durumları kaydedilirken hata:", error)
+      toast({
+        title: "Hata",
+        description: "Ödeme durumları kaydedilirken bir hata oluştu.",
+        variant: "destructive",
+      })
+    }
+  }
+  // Seri Numarası Ayarları kaydet
+  const handleSaveSerialSettings = async () => {
+    try {
+      // Firebase'de seri numarası ayarlarını kaydet - updateSerialSettings kullan
+      await updateSerialSettings(serialSettings)
+      
+      toast({
+        title: "Başarılı",
+        description: "Seri numarası ayarları kaydedildi.",
+      })
+    } catch (error) {
+      console.error("Seri numarası ayarları kaydedilirken hata:", error)
+      toast({
+        title: "Hata", 
+        description: "Seri numarası ayarları kaydedilirken bir hata oluştu.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Seri numarası ayarları değişikliklerini işle
+  const handleSerialSettingsChange = (field: string, value: string | number) => {
+    setSerialSettings(prev => ({
+      ...prev,
+      [field]: value,
+      format: field === 'prefix' ? `${value}-{number}` : prev.format
+    }))
+  }
+
+  // Gider türleri için dropdown verisi
   const expenseCategories = [
     { value: "accommodation", label: "Konaklama" },
     { value: "transportation", label: "Ulaşım" },
@@ -1227,13 +1643,14 @@ export function SettingsView({
       </CardHeader>
       <CardContent>
         <Tabs defaultValue="company" className="w-full">
-          <TabsList className="grid w-full md:w-auto md:inline-flex grid-cols-6">
+          <TabsList className="grid w-full md:w-auto md:inline-flex grid-cols-7">
             <TabsTrigger value="company">Şirket</TabsTrigger>
             <TabsTrigger value="providers">Firmalar</TabsTrigger>
             <TabsTrigger value="expense-types">Gider Türleri</TabsTrigger>
             <TabsTrigger value="activities">Aktiviteler</TabsTrigger>
             <TabsTrigger value="destinations">Destinasyonlar</TabsTrigger>
             <TabsTrigger value="tours">Tur Şablonları</TabsTrigger>
+            <TabsTrigger value="reservation-settings">Rezervasyon Ayarları</TabsTrigger>
           </TabsList>
 
           {/* Şirket Bilgileri */}
@@ -1301,8 +1718,7 @@ export function SettingsView({
                 <div>
                   <Input id="logo" type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
                   <Button variant="outline" onClick={() => document.getElementById("logo")?.click()}>
-                    Logo Yükle
-                  </Button>
+                    Logo Yükle                  </Button>
                 </div>
               </div>
             </div>
@@ -1313,12 +1729,12 @@ export function SettingsView({
                 Şirket Bilgilerini Kaydet
               </Button>
             </div>
-          </TabsContent>          {/* Firmalar */}
-          <TabsContent value="providers">
-            <CompanyManagement />
           </TabsContent>
 
-          {/* Gider Türleri Tab */}
+          {/* Firmalar */}
+          <TabsContent value="providers">
+            <CompanyManagement />
+          </TabsContent>{/* Gider Türleri Tab */}
           <TabsContent value="expense-types" className="space-y-4">
             <div className="flex justify-between items-center">
               <div>
@@ -1343,13 +1759,14 @@ export function SettingsView({
               </div>
             </div>
 
+            <div className="rounded-md border">
               <Table>
                 <TableHeader>
                   <TableRow>
-                  <TableHead className="w-[150px]">Kategori</TableHead>
-                  <TableHead>Gider Adı</TableHead>
-                  <TableHead className="hidden md:table-cell">Açıklama</TableHead>
-                  <TableHead className="w-[100px] text-right">İşlemler</TableHead>
+                    <TableHead className="w-[150px]">Kategori</TableHead>
+                    <TableHead>Gider Adı</TableHead>
+                    <TableHead className="hidden md:table-cell">Açıklama</TableHead>
+                    <TableHead className="w-[100px] text-right">İşlemler</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1362,17 +1779,17 @@ export function SettingsView({
                             "Genel"}
                         </TableCell>
                         <TableCell>{expense.name}</TableCell>
-                      <TableCell className="hidden md:table-cell">{expense.description}</TableCell>
+                        <TableCell className="hidden md:table-cell">{expense.description}</TableCell>
                         <TableCell>
-                        <div className="flex items-center gap-1 justify-end">
+                          <div className="flex items-center gap-1 justify-end">
                             <Button variant="ghost" size="icon" onClick={() => openExpenseDialog(expense)}>
                               <Edit className="h-4 w-4" />
                             </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => openDeleteExpenseDialog(expense)}
-                          >
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => openDeleteExpenseDialog(expense)}
+                            >
                               <Trash2 className="h-4 w-4 text-red-500" />
                             </Button>
                           </div>
@@ -1381,19 +1798,19 @@ export function SettingsView({
                     ))
                   ) : (
                     <TableRow>
-                    <TableCell colSpan={4} className="text-center py-8">
-                      <div className="flex flex-col items-center justify-center space-y-3">
-                        <CircleSlash className="h-8 w-8 text-muted-foreground" />
-                        <div className="text-sm text-muted-foreground">Henüz gider türü eklenmemiş</div>
-                        <Button variant="outline" size="sm" onClick={() => openExpenseDialog()}>
-                          <Plus className="mr-2 h-4 w-4" /> Gider Türü Ekle
-                        </Button>
-                      </div>
+                      <TableCell colSpan={4} className="text-center py-8">
+                        <div className="flex flex-col items-center justify-center space-y-3">
+                          <CircleSlash className="h-8 w-8 text-muted-foreground" />
+                          <div className="text-sm text-muted-foreground">Henüz gider türü eklenmemiş</div>
+                          <Button variant="outline" size="sm" onClick={() => openExpenseDialog()}>
+                            <Plus className="mr-2 h-4 w-4" /> Gider Türü Ekle
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
-                  )} 
-                </TableBody>
+                  )}                </TableBody>
               </Table>
+            </div>
           </TabsContent>
 
           {/* Aktiviteler */}
@@ -1404,9 +1821,7 @@ export function SettingsView({
                 <Plus className="h-4 w-4 mr-2" />
                 Yeni Aktivite Ekle
               </Button>
-            </div>
-
-            <div className="rounded-md border">
+            </div>            <div className="rounded-md border">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -1417,8 +1832,7 @@ export function SettingsView({
                     <TableHead>İşlemler</TableHead>
                   </TableRow>
                 </TableHeader>
-                <TableBody>
-                  {activities.length > 0 ? (
+                <TableBody>                  {activities.length > 0 ? (
                     activities.map((activity) => (
                       <TableRow key={activity.id}>
                         <TableCell className="font-medium">{activity.name}</TableCell>
@@ -1434,8 +1848,7 @@ export function SettingsView({
                             </Button>
                             <Button variant="ghost" size="icon" onClick={() => openDeleteActivityDialog(activity)}>
                               <Trash2 className="h-4 w-4 text-red-500" />
-                            </Button>
-                          </div>
+                            </Button>                          </div>
                         </TableCell>
                       </TableRow>
                     ))
@@ -1472,8 +1885,7 @@ export function SettingsView({
                     <TableHead>İşlemler</TableHead>
                   </TableRow>
                 </TableHeader>
-                <TableBody>
-                  {destinations.length > 0 ? (
+                <TableBody>                  {destinations.length > 0 ? (
                     destinations.map((destination) => (
                       <TableRow key={destination.id}>
                         <TableCell className="font-medium">{destination.name}</TableCell>
@@ -1505,8 +1917,7 @@ export function SettingsView({
                   )}
                 </TableBody>
               </Table>
-            </div>
-          </TabsContent>
+            </div>          </TabsContent>
 
           {/* Tur Şablonları */}
           <TabsContent value="tours" className="space-y-4">
@@ -1514,55 +1925,29 @@ export function SettingsView({
               <div className="flex justify-between items-center">
                 <h3 className="text-lg font-medium">Tur Şablonları</h3>
                 <div className="space-x-2">
+                  <Select value={selectedDestinationId} onValueChange={handleDestinationSelect}>
+                    <SelectTrigger className="w-[200px]">
+                      <SelectValue placeholder="Destinasyon seçin" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {destinations.map((destination) => (
+                        <SelectItem key={destination.id} value={destination.id}>
+                          {destination.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <Button 
                     type="button" 
                     variant="outline" 
                     size="sm" 
-                    onClick={() => {
-                      if (!selectedDestinationId) {
-                        toast({
-                          title: "Uyarı",
-                          description: "Lütfen önce bir destinasyon seçin.",
-                          variant: "destructive",
-                        });
-                        return;
-                      }
-                      setNewTourTemplate({
-                        id: generateUUID(),
-                        name: "",
-                        description: "",
-                        destinationId: selectedDestinationId,
-                        price: 0,
-                        duration: "",
-                        currency: "EUR",
-                      });
-                      setIsEditingTour(false);
-                      setIsTourDialogOpen(true);
-                    }}
+                    onClick={() => openTourDialog()}
+                    disabled={!selectedDestinationId}
                   >
                     <Plus className="h-4 w-4 mr-2" />
-                    Yeni Tur Ekle
+                    Yeni Tur Şablonu Ekle
                   </Button>
                 </div>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Label htmlFor="destinationSelect" className="whitespace-nowrap">Destinasyon Seçin:</Label>
-                <Select 
-                  value={selectedDestinationId} 
-                  onValueChange={handleDestinationSelect}
-                >
-                  <SelectTrigger className="flex-1">
-                    <SelectValue placeholder="Bir destinasyon seçin" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {destinations.map((destination) => (
-                      <SelectItem key={destination.id} value={destination.id}>
-                        {destination.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
 
               {selectedDestinationId ? (
@@ -1578,39 +1963,28 @@ export function SettingsView({
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {(() => {
-                        // Debug için filtreleme bilgilerini yazdır
-                        console.log("Seçili destinasyon ID:", selectedDestinationId);
-                        console.log("Tüm turlar:", tourTemplates);
-                        console.log("Filtrelenmiş turlar:", tourTemplates.filter(tour => tour.destinationId === selectedDestinationId));
-                        
-                        // Filtrelenmiş tur sayısını kontrol et
-                        const filteredTours = tourTemplates.filter(tour => tour.destinationId === selectedDestinationId);
-                        
-                        if (filteredTours.length > 0) {
-                          return filteredTours.map((tour, index) => (
-                            <TableRow key={`tour-row-${tour.id}-${index}`}>
+                      {tourTemplates.filter(tour => tour.destinationId === selectedDestinationId).length > 0 ? (
+                        tourTemplates
+                          .filter(tour => tour.destinationId === selectedDestinationId)
+                          .map((tour) => (
+                            <TableRow key={tour.id}>
                               <TableCell className="font-medium">{tour.name}</TableCell>
                               <TableCell>{tour.description}</TableCell>
                               <TableCell>{tour.duration}</TableCell>
                               <TableCell>
-                                {tour.price} {tour.currency === "EUR" ? "€" : tour.currency === "TRY" ? "₺" : tour.currency}
+                                {tour.price} {tour.currency}
                               </TableCell>
                               <TableCell>
                                 <div className="flex items-center gap-1">
-                                  <Button 
-                                    variant="ghost" 
-                                    size="icon" 
-                                    onClick={() => openTourDialog(tour)}
-                                  >
+                                  <Button variant="ghost" size="icon" onClick={() => openTourDialog(tour)}>
                                     <Edit className="h-4 w-4" />
                                   </Button>
-                                  <Button 
-                                    variant="ghost" 
-                                    size="icon" 
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
                                     onClick={() => {
-                                      setTourToDelete(tour);
-                                      setIsDeleteTourDialogOpen(true);
+                                      setTourToDelete(tour)
+                                      setIsDeleteTourDialogOpen(true)
                                     }}
                                   >
                                     <Trash2 className="h-4 w-4 text-red-500" />
@@ -1618,38 +1992,14 @@ export function SettingsView({
                                 </div>
                               </TableCell>
                             </TableRow>
-                          ));
-                        } else {
-                          return (
-                            <TableRow>
-                              <TableCell colSpan={5} className="text-center py-4">
-                                <div className="flex flex-col items-center justify-center space-y-3 py-8">
-                                  <div className="text-sm text-muted-foreground">Bu destinasyon için henüz tur eklenmemiş</div>
-                                  <Button 
-                                    variant="outline" 
-                                    size="sm" 
-                                    onClick={() => {
-                                      setNewTourTemplate({
-                                        id: generateUUID(),
-                                        name: "",
-                                        description: "",
-                                        destinationId: selectedDestinationId,
-                                        price: 0,
-                                        duration: "",
-                                        currency: "EUR",
-                                      });
-                                      setIsEditingTour(false);
-                                      setIsTourDialogOpen(true);
-                                    }}
-                                  >
-                                    <Plus className="mr-2 h-4 w-4" /> Tur Ekle
-                                  </Button>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        }
-                      })()}
+                          ))
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center py-4">
+                            Bu destinasyon için henüz tur şablonu eklenmemiş
+                          </TableCell>
+                        </TableRow>
+                      )}
                     </TableBody>
                   </Table>
                 </div>
@@ -1661,6 +2011,282 @@ export function SettingsView({
                   </div>
                 </div>
               )}
+            </div>          </TabsContent>
+
+          {/* Rezervasyon Ayarları */}
+          <TabsContent value="reservation-settings" className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+              {/* Alış Yeri Türleri */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <MapPin className="h-5 w-5" />
+                    Alış Yeri Türleri
+                  </CardTitle>
+                  <CardDescription>
+                    Müşteri alış yeri türlerini yönetin
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <Button                      onClick={() => {
+                        setNewPickupType({
+                          id: generateUUID(),
+                          name: "",
+                          description: ""
+                        })
+                        setIsEditingPickupType(false)
+                        setIsPickupTypeDialogOpen(true)
+                      }}
+                      className="w-full bg-[#00a1c6] hover:bg-[#008bb3]"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Yeni Alış Yeri Türü Ekle
+                    </Button>
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {pickupTypes.map((type) => (
+                        <div key={type.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                          <div>
+                            <div className="font-medium">{type.name}</div>
+                            <div className="text-sm text-gray-500">{type.description}</div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setNewPickupType(type)
+                                setIsEditingPickupType(true)
+                                setIsPickupTypeDialogOpen(true)
+                              }}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={async () => {
+                                try {
+                                  await handleDeletePickupType(type)
+                                } catch (error) {
+                                  console.error("Alış yeri türü silinirken hata:", error)
+                                  toast({
+                                    title: "Hata",
+                                    description: "Alış yeri türü silinirken bir hata oluştu.",
+                                    variant: "destructive",
+                                  })
+                                }
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Ödeme Yöntemleri */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Activity className="h-5 w-5" />
+                    Ödeme Yapanlar
+                  </CardTitle>
+                  <CardDescription>
+                    Ödeme yapan türlerini yönetin
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <Button                      onClick={() => {
+                        setNewPaymentMethod({
+                          id: generateUUID(),
+                          name: "",
+                          description: ""
+                        })
+                        setIsEditingPaymentMethod(false)
+                        setIsPaymentMethodDialogOpen(true)
+                      }}
+                      className="w-full bg-[#00a1c6] hover:bg-[#008bb3]"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Yeni Ödeme Yapan Ekle
+                    </Button>
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {paymentMethods.map((method) => (
+                        <div key={method.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                          <div>
+                            <div className="font-medium">{method.name}</div>
+                            <div className="text-sm text-gray-500">{method.description}</div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setNewPaymentMethod(method)
+                                setIsEditingPaymentMethod(true)
+                                setIsPaymentMethodDialogOpen(true)
+                              }}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={async () => {
+                                try {
+                                  await handleDeletePaymentMethod(method)
+                                } catch (error) {
+                                  console.error("Ödeme yöntemi silinirken hata:", error)
+                                  toast({
+                                    title: "Hata",
+                                    description: "Ödeme yöntemi silinirken bir hata oluştu.",
+                                    variant: "destructive",
+                                  })
+                                }
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Ödeme Durumları */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <CircleSlash className="h-5 w-5" />
+                    Ödeme Durumları
+                  </CardTitle>
+                  <CardDescription>
+                    Ödeme durumlarını yönetin
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <Button                      onClick={() => {
+                        setNewPaymentStatus({
+                          id: generateUUID(),
+                          name: "",
+                          color: "#10b981"
+                        })
+                        setIsEditingPaymentStatus(false)
+                        setIsPaymentStatusDialogOpen(true)
+                      }}
+                      className="w-full bg-[#00a1c6] hover:bg-[#008bb3]"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Yeni Ödeme Durumu Ekle
+                    </Button>
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {paymentStatuses.map((status) => (
+                        <div key={status.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                          <div className="flex items-center gap-2">
+                            <div 
+                              className="w-4 h-4 rounded-full" 
+                              style={{ backgroundColor: status.color }}
+                            />
+                            <div className="font-medium">{status.name}</div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setNewPaymentStatus(status)
+                                setIsEditingPaymentStatus(true)
+                                setIsPaymentStatusDialogOpen(true)
+                              }}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={async () => {
+                                try {
+                                  await handleDeletePaymentStatus(status)
+                                } catch (error) {
+                                  console.error("Ödeme durumu silinirken hata:", error)
+                                  toast({
+                                    title: "Hata",
+                                    description: "Ödeme durumu silinirken bir hata oluştu.",
+                                    variant: "destructive",
+                                  })
+                                }
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Seri Numarası Ayarları */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Save className="h-5 w-5" />
+                    Seri Numarası Ayarları
+                  </CardTitle>
+                  <CardDescription>
+                    Rezervasyon seri numarası formatını ayarlayın
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="serialPrefix">Prefix</Label>                        <Input 
+                          id="serialPrefix"
+                          value={serialSettings.prefix}
+                          onChange={(e) => handleSerialSettingsChange('prefix', e.target.value)}
+                          placeholder="REZ"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="serialDigits">Basamak Sayısı</Label>                        <Input 
+                          id="serialDigits"
+                          type="number"
+                          value={serialSettings.digits}
+                          onChange={(e) => handleSerialSettingsChange('digits', parseInt(e.target.value) || 4)}
+                          min={1}
+                          max={10}
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="serialNext">Bir Sonraki Numara</Label>                        <Input 
+                          id="serialNext"
+                          type="number"
+                          value={serialSettings.nextNumber}
+                          onChange={(e) => handleSerialSettingsChange('nextNumber', parseInt(e.target.value) || 1)}
+                          min={1}
+                        />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Örnek Format</Label>
+                      <div className="p-3 bg-gray-100 rounded-lg font-mono">
+                        {serialSettings.prefix}-{String(serialSettings.nextNumber).padStart(serialSettings.digits, '0')}
+                      </div>
+                    </div>                    <Button 
+                      onClick={handleSaveSerialSettings}
+                      className="w-full bg-[#00a1c6] hover:bg-[#008bb3]"
+                    >
+                      Ayarları Kaydet
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           </TabsContent>
         </Tabs>
@@ -2048,9 +2674,7 @@ export function SettingsView({
             </Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
-
-      {/* Tur Şablonu Silme Dialog */}
+      </Dialog>      {/* Tur Şablonu Silme Dialog */}
       <AlertDialog open={isDeleteTourDialogOpen} onOpenChange={setIsDeleteTourDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -2067,6 +2691,150 @@ export function SettingsView({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ============= REZERVASYON AYARLARI DİYALOGLARI ============= */}
+
+      {/* Alış Yeri Türü Ekleme/Düzenleme Dialog */}
+      <Dialog open={isPickupTypeDialogOpen} onOpenChange={setIsPickupTypeDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{isEditingPickupType ? "Alış Yeri Türünü Düzenle" : "Yeni Alış Yeri Türü Ekle"}</DialogTitle>
+            <DialogDescription>
+              Rezervasyonlarda kullanılacak alış yeri türünü tanımlayın.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="pickupTypeName">Alış Yeri Türü Adı <span className="text-red-500">*</span></Label>
+              <Input
+                id="pickupTypeName"
+                name="name"
+                value={newPickupType.name}
+                onChange={handlePickupTypeChange}
+                placeholder="Örn: Otel, Acenta, Havalimanı"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="pickupTypeDescription">Açıklama</Label>
+              <Textarea
+                id="pickupTypeDescription"
+                name="description"
+                value={newPickupType.description}
+                onChange={handlePickupTypeChange}
+                placeholder="Alış yeri türü açıklaması"
+                rows={3}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsPickupTypeDialogOpen(false)}>
+              İptal
+            </Button>
+            <Button onClick={handleSavePickupType} className="bg-[#00a1c6] hover:bg-[#008bb3]">
+              {isEditingPickupType ? "Güncelle" : "Ekle"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Ödeme Yöntemi Ekleme/Düzenleme Dialog */}
+      <Dialog open={isPaymentMethodDialogOpen} onOpenChange={setIsPaymentMethodDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{isEditingPaymentMethod ? "Ödeme Yapanı Düzenle" : "Yeni Ödeme Yapan Ekle"}</DialogTitle>
+            <DialogDescription>
+              Rezervasyonlarda kullanılacak ödeme yapan türünü tanımlayın.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="paymentMethodName">Ödeme Yapan Adı <span className="text-red-500">*</span></Label>
+              <Input
+                id="paymentMethodName"
+                name="name"
+                value={newPaymentMethod.name}
+                onChange={handlePaymentMethodChange}
+                placeholder="Örn: Aracı, Müşteri, Otel"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="paymentMethodDescription">Açıklama</Label>
+              <Textarea
+                id="paymentMethodDescription"
+                name="description"
+                value={newPaymentMethod.description}
+                onChange={handlePaymentMethodChange}
+                placeholder="Ödeme yapan açıklaması"
+                rows={3}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsPaymentMethodDialogOpen(false)}>
+              İptal
+            </Button>
+            <Button onClick={handleSavePaymentMethod} className="bg-[#00a1c6] hover:bg-[#008bb3]">
+              {isEditingPaymentMethod ? "Güncelle" : "Ekle"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Ödeme Durumu Ekleme/Düzenleme Dialog */}
+      <Dialog open={isPaymentStatusDialogOpen} onOpenChange={setIsPaymentStatusDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{isEditingPaymentStatus ? "Ödeme Durumunu Düzenle" : "Yeni Ödeme Durumu Ekle"}</DialogTitle>
+            <DialogDescription>
+              Rezervasyonlarda kullanılacak ödeme durumunu tanımlayın.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="paymentStatusName">Ödeme Durumu Adı <span className="text-red-500">*</span></Label>
+              <Input
+                id="paymentStatusName"
+                name="name"
+                value={newPaymentStatus.name}
+                onChange={handlePaymentStatusChange}
+                placeholder="Örn: Ödendi, Bekliyor, İptal"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="paymentStatusColor">Renk</Label>
+              <Input
+                id="paymentStatusColor"
+                name="color"
+                type="color"
+                value={newPaymentStatus.color}
+                onChange={handlePaymentStatusChange}
+                className="w-full h-10"
+              />
+              <p className="text-xs text-muted-foreground">
+                Bu ödeme durumu için kullanılacak renk
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsPaymentStatusDialogOpen(false)}>
+              İptal
+            </Button>
+            <Button onClick={handleSavePaymentStatus} className="bg-[#00a1c6] hover:bg-[#008bb3]">
+              {isEditingPaymentStatus ? "Güncelle" : "Ekle"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </Card>
   )
 }

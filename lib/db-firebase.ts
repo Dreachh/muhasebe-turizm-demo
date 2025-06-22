@@ -27,23 +27,50 @@ import { getDatabase, ref, set, get } from "firebase/database";
 
 // IndexedDB'deki STORES koleksiyonuna karşılık gelen koleksiyonlar
 export const COLLECTIONS = {
+  // Ana veri koleksiyonları
   tours: "tours", 
   financials: "financials",
-  DEBTS: "debts", // Borçlar - Büyük harfli anahtar, küçük harfli değer
-  PAYMENTS: "payments", // Ödemeler - Büyük harfli anahtar, küçük harfli değer
-  COMPANIES: "companies", // Tedarikçi firmalar - Büyük harfli anahtar, küçük harfli değer
-  CUSTOMER_DEBTS: "customer_debts", // Müşteri borçları
   customers: "customers",
   settings: "settings",
   expenses: "expenses",
   providers: "providers",
   activities: "activities",
   destinations: "destinations",
+  
+  // Borç ve ödeme yönetimi
+  DEBTS: "debts", 
+  PAYMENTS: "payments", 
+  COMPANIES: "companies", 
+  CUSTOMER_DEBTS: "customer_debts", 
+  
+  // Diğer yardımcı koleksiyonlar
   ai_conversations: "ai_conversations",
   customer_notes: "customer_notes",
   referral_sources: "referral_sources", 
   tourTemplates: "tourTemplates",
-  periods: "periods", // Dönem verileri koleksiyonu eklendi
+  periods: "periods",
+    // Rezervasyon sistemi koleksiyonları (ana koleksiyonlar)
+  reservations: "reservations",
+  countries: "countries",
+  paymentMethods: "paymentMethods",
+  paymentStatuses: "paymentStatuses",
+  serialSettings: "serialSettings",
+  
+  // Rezervasyon ayar koleksiyonları
+  reservationCompanies: "reservationCompanies",
+  pickupTypes: "pickupTypes",
+  referenceSources: "referenceSources",
+  
+  // DEPRECATED: Aşağıdaki koleksiyonlar artık kullanılmıyor
+  // Bunları Firebase'den manuel olarak silin:
+  // - masraflar (expenses kullanılıyor)
+  // - finansallar (financials kullanılıyor)
+  // - odemeler (payments kullanılıyor)
+  // - pikapTurleri (pickupTypes kullanılıyor) 
+  // - saglayicilar (providers kullanılıyor)
+  // - seriyeadlari (serialSettings kullanılıyor)
+  // - turSablonlari (tourTemplates kullanılıyor)
+  // - turlar (tours kullanılıyor)
 };
 
 // UUID oluşturma fonksiyonu (IndexedDB'den aynısını kullanıyoruz)
@@ -548,14 +575,13 @@ export const getCompanies = async (): Promise<any[]> => {
     
     const colRef = collection(firestore, COLLECTIONS.COMPANIES);
     const snapshot = await getDocs(colRef);
-    
-    // "deleted" tipindeki firmaları filtrele
+      // "deleted" tipindeki firmaları filtrele
     return snapshot.docs
       .map(doc => ({
         ...doc.data(),
         id: doc.id
       }))
-      .filter(company => company.type !== "deleted"); // Silinen firmaları filtreleme
+      .filter((company: any) => company.type !== "deleted"); // Silinen firmaları filtreleme
   } catch (error) {
     console.error(`Firma verileri alınırken hata:`, error);
     return [];
@@ -700,9 +726,442 @@ export async function incrementSessionVersion() {
         createdAt: serverTimestamp(),
       });
       return { success: true, newVersion: 2 };
-    }
-  } catch (error) {
+    }  } catch (error) {
     console.error("Oturum sıfırlama hatası:", error);
     return { success: false, error };
+  }
+}
+
+// ==================== REZERVASYON SİSTEMİ FONKSİYONLARI ====================
+
+// Rezervasyon CRUD işlemleri
+export async function getReservations(): Promise<any[]> {
+  try {
+    const firestore = getDb();
+    if (!firestore) {
+      console.warn("Firestore erişilemedi");
+      return [];
+    }
+
+    const q = query(collection(firestore, COLLECTIONS.reservations), orderBy('createdAt', 'desc'));
+    const querySnapshot = await getDocs(q);
+    const reservations = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+
+    return reservations;
+  } catch (error) {
+    console.error("Rezervasyonlar alınırken hata:", error);
+    return [];
+  }
+}
+
+export async function saveReservation(reservation: any): Promise<boolean> {
+  try {
+    const firestore = getDb();
+    if (!firestore) {
+      console.warn("Firestore erişilemedi");
+      return false;
+    }
+
+    if (reservation.id) {
+      await updateDoc(doc(firestore, COLLECTIONS.reservations, reservation.id), {
+        ...reservation,
+        updatedAt: serverTimestamp()
+      });
+    } else {
+      await addDoc(collection(firestore, COLLECTIONS.reservations), {
+        ...reservation,
+        createdAt: serverTimestamp()
+      });
+    }
+
+    return true;
+  } catch (error) {
+    console.error("Rezervasyon kaydedilirken hata:", error);
+    return false;
+  }
+}
+
+export async function deleteReservation(id: string): Promise<boolean> {
+  try {
+    const firestore = getDb();
+    if (!firestore) {
+      const reservations = JSON.parse(localStorage.getItem('reservations') || '[]');
+      const filtered = reservations.filter((r: any) => r.id !== id);
+      localStorage.setItem('reservations', JSON.stringify(filtered));
+      return true;
+    }
+
+    await deleteDoc(doc(firestore, COLLECTIONS.reservations, id));
+    return true;
+  } catch (error) {
+    console.error("Rezervasyon silinirken hata:", error);
+    return false;
+  }
+}
+
+// Rezervasyon ayarları CRUD işlemleri
+export async function getReservationSettings(type: string): Promise<any[]> {
+  try {
+    console.log(`getReservationSettings çağrıldı, type: ${type}`);
+    
+    const firestore = getDb();
+    if (!firestore) {
+      console.log('Firebase bağlantısı yok, localStorage\'dan alınıyor');
+      return getLocalFallbackData(type);
+    }
+
+    // Type mapping - doğru koleksiyon adlarını kullan
+    const typeMapping: Record<string, string> = {
+      destinations: 'destinations',
+      companies: 'reservationCompanies',
+      pickupTypes: 'pickupTypes',
+      countries: 'countries',
+      paymentMethods: 'paymentMethods',
+      paymentStatuses: 'paymentStatuses',
+      referenceSources: 'referenceSources'
+    };
+
+    const collectionName = typeMapping[type] || type;
+    console.log(`Koleksiyon adı: ${collectionName}`);
+    
+    if (!COLLECTIONS[collectionName as keyof typeof COLLECTIONS]) {
+      console.warn(`Koleksiyon COLLECTIONS objesinde bulunamadı: ${collectionName}`);
+      return getLocalFallbackData(type);
+    }
+
+    try {
+      const q = query(collection(firestore, COLLECTIONS[collectionName as keyof typeof COLLECTIONS] as string));
+      const querySnapshot = await getDocs(q);
+      const data = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      console.log(`${type} için ${data.length} kayıt bulundu`);
+      
+      // Eğer koleksiyon boşsa, örnek verileri oluştur
+      if (data.length === 0) {
+        console.log(`${type} koleksiyonu boş, örnek veriler oluşturuluyor...`);
+        const sampleData = getSampleData(type);
+        await createSampleDataInFirestore(collectionName, sampleData);
+        localStorage.setItem(`reservation_${type}`, JSON.stringify(sampleData));
+        return sampleData;
+      }
+
+      localStorage.setItem(`reservation_${type}`, JSON.stringify(data));
+      return data;
+    } catch (firestoreError) {
+      console.error(`Firestore'dan ${type} alınırken hata:`, firestoreError);
+      return getLocalFallbackData(type);
+    }
+  } catch (error) {
+    console.error(`Rezervasyon ${type} alınırken genel hata:`, error);
+    return getLocalFallbackData(type);
+  }
+}
+
+// Local fallback data fonksiyonu
+function getLocalFallbackData(type: string): any[] {
+  const localData = JSON.parse(localStorage.getItem(`reservation_${type}`) || '[]');
+  if (localData.length > 0) {
+    console.log(`${type} için localStorage\'dan ${localData.length} kayıt alındı`);
+    return localData;
+  }
+  
+  console.log(`${type} için örnek veriler döndürülüyor`);
+  return getSampleData(type);
+}
+
+// Örnek veriler fonksiyonu
+function getSampleData(type: string): any[] {
+  switch (type) {
+    case 'pickupTypes':
+      return [
+        { id: 'hotel', name: 'Otel', value: 'hotel' },
+        { id: 'airport', name: 'Havalimanı', value: 'airport' },
+        { id: 'other', name: 'Diğer', value: 'other' }
+      ];
+    
+    case 'companies':
+      return [
+        { id: 'comp1', name: 'Aracı Firma 1', value: 'comp1' },
+        { id: 'comp2', name: 'Aracı Firma 2', value: 'comp2' }
+      ];
+    
+    case 'paymentMethods':
+      return [
+        { id: 'cash', name: 'Nakit', value: 'cash' },
+        { id: 'card', name: 'Kredi Kartı', value: 'card' },
+        { id: 'transfer', name: 'Havale', value: 'transfer' }
+      ];
+    
+    case 'paymentStatuses':
+      return [
+        { id: 'paid', name: 'Ödendi', value: 'paid' },
+        { id: 'pending', name: 'Beklemede', value: 'pending' },
+        { id: 'partial', name: 'Kısmi Ödeme', value: 'partial' }
+      ];
+    
+    case 'referenceSources':
+      return [
+        { id: 'website', name: 'Web Sitesi', value: 'website' },
+        { id: 'social', name: 'Sosyal Medya', value: 'social' },
+        { id: 'referral', name: 'Tavsiye', value: 'referral' }
+      ];
+    
+    case 'countries':
+      return [
+        { id: 'tr', name: 'Türkiye', value: 'tr' },
+        { id: 'de', name: 'Almanya', value: 'de' },
+        { id: 'us', name: 'ABD', value: 'us' }
+      ];
+    
+    default:
+      return [];
+  }
+}
+
+// Firestore'da örnek veri oluşturma fonksiyonu
+async function createSampleDataInFirestore(collectionName: string, sampleData: any[]): Promise<void> {
+  try {
+    const firestore = getDb();
+    if (!firestore || sampleData.length === 0) return;
+
+    const batch = writeBatch(firestore);
+    const collectionRef = collection(firestore, COLLECTIONS[collectionName as keyof typeof COLLECTIONS] as string);
+    
+    sampleData.forEach((item) => {
+      const docRef = doc(collectionRef, item.id);
+      batch.set(docRef, {
+        ...item,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+    });
+
+    await batch.commit();
+    console.log(`${collectionName} koleksiyonuna ${sampleData.length} örnek kayıt eklendi`);
+  } catch (error) {
+    console.error(`${collectionName} koleksiyonuna örnek veri eklenirken hata:`, error);
+  }
+}
+
+export async function saveReservationSettings(type: string, data: any[]): Promise<boolean> {
+  try {
+    const firestore = getDb();
+    if (!firestore) {
+      localStorage.setItem(`reservation_${type}`, JSON.stringify(data));
+      return true;
+    }
+
+    // Type mapping - doğru koleksiyon adlarını kullan
+    const typeMapping: Record<string, string> = {
+      destinations: 'destinations',
+      companies: 'reservationCompanies',
+      pickupTypes: 'pickupTypes',
+      countries: 'countries',
+      paymentMethods: 'paymentMethods',
+      paymentStatuses: 'paymentStatuses',
+      referenceSources: 'referenceSources'
+    };
+
+    const collectionName = typeMapping[type] || type;
+    if (!COLLECTIONS[collectionName as keyof typeof COLLECTIONS]) {
+      console.warn(`Koleksiyon bulunamadı: ${collectionName}`);
+      localStorage.setItem(`reservation_${type}`, JSON.stringify(data));
+      return true;
+    }
+
+    const batch = writeBatch(firestore);
+    const colRef = collection(firestore, COLLECTIONS[collectionName as keyof typeof COLLECTIONS] as string);
+
+    // Mevcut verileri sil
+    const existingDocs = await getDocs(colRef);
+    existingDocs.docs.forEach(doc => {
+      batch.delete(doc.ref);
+    });
+
+    // Yeni verileri ekle
+    data.forEach(item => {
+      const docRef = doc(colRef, item.id);
+      batch.set(docRef, {
+        ...item,
+        updatedAt: serverTimestamp()
+      });
+    });
+
+    await batch.commit();
+    localStorage.setItem(`reservation_${type}`, JSON.stringify(data));
+    return true;
+  } catch (error) {
+    console.error(`Rezervasyon ${type} kaydedilirken hata:`, error);
+    return false;
+  }
+}
+
+// Seri numarası yönetimi
+export async function getNextSerialNumber(): Promise<string> {
+  try {
+    const firestore = getDb();
+    if (!firestore) {
+      const settings = JSON.parse(localStorage.getItem('serialSettings') || '{"prefix":"REZ","nextNumber":1,"digits":4}');
+      const serial = `${settings.prefix}-${String(settings.nextNumber).padStart(settings.digits, '0')}`;
+      // Burada artırmıyoruz, sadece mevcut sıradaki numarayı döndürüyoruz
+      return serial;
+    }
+
+    const docRef = doc(firestore, COLLECTIONS.serialSettings, 'reservations');
+    const docSnap = await getDoc(docRef);
+
+    let settings = { prefix: 'REZ', nextNumber: 1, digits: 4 };
+    if (docSnap.exists()) {
+      settings = { ...settings, ...docSnap.data() };
+    }
+
+    const serial = `${settings.prefix}-${String(settings.nextNumber).padStart(settings.digits, '0')}`;
+    
+    // Artık burada nextNumber'ı artırmıyoruz, sadece mevcut numarayı döndürüyoruz
+    return serial;
+  } catch (error) {
+    console.error("Seri numarası alınırken hata:", error);
+    // Fallback
+    const timestamp = Date.now().toString().slice(-6);
+    return `REZ-${timestamp}`;
+  }
+}
+
+// Yeni fonksiyon: Seri numarayı artır (sadece gerçekten kaydedildiğinde çağrılacak)
+export async function incrementSerialNumber(): Promise<void> {
+  try {
+    const firestore = getDb();
+    if (!firestore) {
+      const settings = JSON.parse(localStorage.getItem('serialSettings') || '{"prefix":"REZ","nextNumber":1,"digits":4}');
+      settings.nextNumber++;
+      localStorage.setItem('serialSettings', JSON.stringify(settings));
+      return;
+    }
+
+    const docRef = doc(firestore, COLLECTIONS.serialSettings, 'reservations');
+    const docSnap = await getDoc(docRef);
+
+    let settings = { prefix: 'REZ', nextNumber: 1, digits: 4 };
+    if (docSnap.exists()) {
+      settings = { ...settings, ...docSnap.data() };
+    }
+
+    // Sonraki numarayı güncelle
+    await setDoc(docRef, {
+      ...settings,
+      nextNumber: settings.nextNumber + 1,
+      updatedAt: serverTimestamp()
+    });
+
+  } catch (error) {
+    console.error("Seri numarası artırılırken hata:", error);
+    throw error;
+  }
+}
+
+export async function updateSerialSettings(settings: any): Promise<boolean> {
+  try {
+    const firestore = getDb();
+    if (!firestore) {
+      localStorage.setItem('serialSettings', JSON.stringify(settings));
+      return true;
+    }
+
+    // Güvenli document referansı oluştur
+    const collectionName = COLLECTIONS.serialSettings;
+    const documentId = 'reservations';
+    
+    if (!collectionName || !documentId) {
+      console.error("Geçersiz koleksiyon veya doküman ID'si:", { collectionName, documentId });
+      return false;
+    }
+
+    const docRef = doc(firestore, collectionName, documentId);
+    await setDoc(docRef, {
+      ...settings,
+      updatedAt: serverTimestamp()
+    }, { merge: true }); // merge: true ekledik, mevcut veriyi korur
+
+    localStorage.setItem('serialSettings', JSON.stringify(settings));
+    return true;
+  } catch (error) {
+    console.error("Seri numarası ayarları güncellenirken hata:", error);
+    // Firebase başarısız olursa en azından localStorage'a kaydet
+    try {
+      localStorage.setItem('serialSettings', JSON.stringify(settings));
+      return true;
+    } catch (localError) {
+      console.error("localStorage'a da kayıt başarısız:", localError);
+      return false;
+    }
+  }
+}
+
+// Rezervasyonlara özel yeni fonksiyonlar
+export async function getReservationById(id: string): Promise<any | null> {
+  try {
+    console.log(`getReservationById çağrıldı, id: ${id}`);
+    
+    const firestore = getDb();
+    if (!firestore) {
+      console.log('Firebase bağlantısı yok, localStorage\'dan alınıyor');
+      // Firebase kullanılamıyorsa localStorage'dan al
+      const reservations = JSON.parse(localStorage.getItem('reservations') || '[]');
+      const found = reservations.find((r: any) => r.id === id) || null;
+      console.log('localStorage\'dan bulunan rezervasyon:', found ? 'var' : 'yok');
+      return found;
+    }
+
+    const docRef = doc(firestore, COLLECTIONS.reservations, id);
+    const docSnap = await getDoc(docRef);
+    
+    if (docSnap.exists()) {
+      const data = {
+        id: docSnap.id,
+        ...docSnap.data()
+      };
+      console.log('Firestore\'dan rezervasyon bulundu:', data);
+      return data;
+    } else {
+      console.log(`Rezervasyon bulunamadı: ${id}`);
+      return null;
+    }
+  } catch (error) {
+    console.error("Rezervasyon alınırken hata:", error);
+    return null;
+  }
+}
+
+export async function updateReservation(id: string, reservation: any): Promise<boolean> {
+  try {
+    const firestore = getDb();
+    if (!firestore) {
+      // Firebase kullanılamıyorsa localStorage'ı güncelle
+      const reservations = JSON.parse(localStorage.getItem('reservations') || '[]');
+      const index = reservations.findIndex((r: any) => r.id === id);
+      if (index !== -1) {
+        reservations[index] = { ...reservations[index], ...reservation, updatedAt: new Date().toISOString() };
+        localStorage.setItem('reservations', JSON.stringify(reservations));
+        return true;
+      }
+      return false;
+    }
+
+    const docRef = doc(firestore, COLLECTIONS.reservations, id);
+    await updateDoc(docRef, {
+      ...reservation,
+      updatedAt: serverTimestamp()
+    });
+
+    return true;
+  } catch (error) {
+    console.error("Rezervasyon güncellenirken hata:", error);
+    return false;
   }
 }

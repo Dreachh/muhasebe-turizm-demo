@@ -22,7 +22,7 @@ const companySettings = {
   id: "app-settings",
   companyName: "Passionis Travel (Çilem Turizm Seyahat Acentası)",
   license: "TURSAB NO:17606",
-  email: "info@passionistravel.com.tr",
+  email: "info@nehirtravel.com",
   phone1: "+90 506 166 76 85",
   phone2: "+90 534 078 75 83",
   address: "Hobyar Mah. Yalıköşkü Cd. No:18 D:203, Mühürdarzade iş Hanı FATİH/İSTANBUL",

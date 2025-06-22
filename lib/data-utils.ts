@@ -18,7 +18,7 @@ export const loadSavedData = async () => {
     const companyInfo = savedCompanyInfo
       ? JSON.parse(savedCompanyInfo)
       : {
-          name: "PassionisTravel",
+          name: "Nehir Travel",
           address: "Örnek Mahallesi, Örnek Caddesi No:123, İstanbul",
           phone: "+90 212 123 4567",
           email: "info@passionistour.com",

@@ -49,10 +49,10 @@ export function MainHeader({ currentView, onNavigate }: MainHeaderProps) {
                 </Button>
               </SheetTrigger>
               <SheetContent side="left" className="w-[250px] p-0">
-                <div className="flex flex-col h-full">
-                  <div className="p-4 border-b">
-                    <div className="flex items-center justify-center">
-                      <img src="/logo.svg" alt="PassionisTravel Logo" className="h-12" />
+                <div className="flex flex-col h-full">                  <div className="p-4 border-b">
+                    <div className="flex flex-col items-center">
+                      <img src="/placeholder-logo.png" alt="Nehir Travel Logo" className="h-12 mb-2" />
+                      <span className="text-xs text-gray-600 font-medium text-center">Yönetim Sistemi Kontrol Paneli</span>
                     </div>
                   </div>
                   <nav className="flex-1 overflow-auto p-2">
@@ -79,10 +79,9 @@ export function MainHeader({ currentView, onNavigate }: MainHeaderProps) {
                   </nav>
                 </div>
               </SheetContent>
-            </Sheet>
-
-            <div className="flex items-center cursor-pointer" onClick={() => onNavigate("main-dashboard")}>
-              <img src="/logo.svg" alt="PassionisTravel Logo" className="h-14" />
+            </Sheet>            <div className="flex flex-col items-start cursor-pointer" onClick={() => onNavigate("main-dashboard")}>
+              <img src="/placeholder-logo.png" alt="Nehir Travel Logo" className="h-14 mb-1" />
+              <span className="text-sm text-gray-600 font-medium">Yönetim Sistemi Kontrol Paneli</span>
             </div>
           </div>
 

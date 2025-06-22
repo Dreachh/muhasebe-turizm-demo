@@ -18,7 +18,7 @@ import dynamic from "next/dynamic";
 import DatabaseNavLinks from "../components/database-nav-links";
 const BorclarPage = dynamic(() => import("./borclar/page"), { ssr: false });
 import { exportData, importData } from "../lib/export-import"
-import { getAllData, addData, updateData, initializeDB, clearStore, deleteData } from "../lib/db"
+import { getAllData, addData, updateData, initializeDB, clearStore, deleteData, getReservations } from "../lib/db"
 import { CustomerView } from "../components/customer-view"
 import { MainHeader } from "../components/main-header"
 import { Sidebar } from "../components/sidebar"
@@ -32,6 +32,9 @@ import PaymentManagement from "../components/payment-management" // Yeni: Ödeme
 import { CurrencyView } from "../components/currency-view" // Döviz görünümü
 import { PeriodDataView } from "../components/period-data-view" // Yeni: Dönem Verileri görünümü
 import { createCustomerDebtsFromTour } from "@/lib/debt-service";
+import { RezervasyonForm } from "@/components/rezervasyon/rezervasyon-form";
+import { RezervasyonListe } from "../components/rezervasyon/rezervasyon-liste" // Rezervasyon liste
+import { Rezervasyon } from "@/types/rezervasyon-types";
 
 // Uygulama verilerini tamamen sıfırlamak için fonksiyon
 const resetAllData = async () => {
@@ -173,7 +176,9 @@ export default function Home() {
   const [financialData, setFinancialData] = useState<FinancialData[]>([])
   const [toursData, setToursData] = useState<TourData[]>([])
   const [customersData, setCustomersData] = useState<CustomerData[]>([])
+  const [reservationsData, setReservationsData] = useState<Rezervasyon[]>([]) // Rezervasyon verileri için yeni state
   const [editingRecord, setEditingRecord] = useState<any>(null)
+  const [editingReservation, setEditingReservation] = useState<Rezervasyon | null>(null) // Rezervasyon düzenleme
   const [isLoading, setIsLoading] = useState<boolean>(true)
   const [forceReload, setForceReload] = useState<boolean>(false)
 
@@ -184,33 +189,28 @@ export default function Home() {
   // Add state to store temporary form data
   const [tempTourFormData, setTempTourFormData] = useState<any>(null)
   const [previousView, setPreviousView] = useState<string | null>(null)
-  // Firebase Authentication ile giriş kontrol
-  // useEffect(() => {
-  //   if (typeof window !== 'undefined') {
-  //     // Firebase Authentication durumunu kontrol et
-  //     const checkAuth = async () => {
-  //       try {
-  //         // Firebase oturum durumunu localStorage'dan kontrol et
-  //         // (Firebase.js'den kontrol etmek daha iyi olurdu ama şu anda bu şekilde yapalım)
-  //         const isLoggedIn = localStorage.getItem('adminLoggedIn') === 'true';
-          
-  //         if (!isLoggedIn) {
-  //           console.log('Kullanıcı giriş yapmamış, login sayfasına yönlendiriliyor');
-  //           router.push('/login');
-  //         } else {
-  //           console.log('Kullanıcı giriş yapmış, uygulama erişimi sağlanıyor');
-  //         }
-  //       } catch (error) {
-  //         console.error('Oturum kontrolü hatası:', error);
-  //         router.push('/login');
-  //       }
-  //     };
-    
-  //     checkAuth();
-  //   }
-  // }, [router]);
 
-  // Yedekleme ve geri yükleme işlemleri için fonksiyonlar
+  const loadReservations = async () => {
+    setIsLoading(true);
+    try {
+      console.log("Firebase'den rezervasyonlar yükleniyor...");
+      let data = await getReservations();
+
+      // Firebase'den rezervasyon verilerini alıyoruz - test verisi eklenmeyecek
+      
+      setReservationsData(data);
+      console.log("✅ Rezervasyonlar başarıyla yüklendi:", data);
+    } catch (error) {
+      console.error("Rezervasyonlar yüklenirken hata oluştu:", error);
+      toast({
+        title: "Hata",
+        description: "Rezervasyonlar yüklenirken bir hata oluştu.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };  // Yedekleme ve geri yükleme işlemleri için fonksiyonlar
   const handleExportData = async () => {
     try {
       await exportData();
@@ -266,86 +266,30 @@ export default function Home() {
 
   useEffect(() => {
     async function fetchData() {
+      setIsLoading(true);
       try {
         if (typeof window !== 'undefined') {
           console.log("Veritabanından veriler yükleniyor...");
           await initializeDB();
-          
-          // Sıfırlama bayrağını kontrol et
-          const shouldResetData = localStorage.getItem('resetAllData') === 'true';
-          
-          if (shouldResetData) {
-            console.log("Tüm veriler sıfırlanıyor...");
-            localStorage.removeItem('resetAllData'); // Bayrağı kaldır
-            
-            // Tüm verileri temizle
-            await clearStore("tours");
-            await clearStore("financials");
-            await clearStore("customers");
-            await clearStore("settings");
-            await clearStore("activities");
-            await clearStore("destinations");
-            await clearStore("providers");
-            await clearStore("expenses");
-            await clearStore("referral_sources");
-            
-            // Passionis Travel verilerini yükle - DEVRE DIŞI BIRAKILDI
-            // console.log("Passionis Travel verileri yükleniyor...");
-            // await loadInitialData();
-            
-            // Verileri al ve state'lere aktar
-            const updatedFinancialData = await getAllData("financials");
-            const updatedToursData = await getAllData("tours");
-            const updatedCustomersData = await getAllData("customers");
-            
-            setFinancialData(updatedFinancialData);
-            setToursData(updatedToursData);
-            setCustomersData(updatedCustomersData);
-            
-            setSplashFinished(true);
-            return;
-          }
 
-          // Normal veri yükleme işlemi
-          // 1. IndexedDB'den veri yükle
+          // Diğer verileri yükle (finans, turlar vb.)
           const financialDataFromDB = await getAllData("financials") as FinancialData[];
           const toursDataFromDB = await getAllData("tours") as TourData[];
           const customersDataFromDB = await getAllData("customers") as CustomerData[];
-          // Passionis için gerekli verileri yükle
-          const destinationsFromDB = await getAllData("destinations");
-          const activitiesFromDB = await getAllData("activities");
-          const providersFromDB = await getAllData("providers");
 
-          let financialLoaded = false;
-          let toursLoaded = false;
-          let customersLoaded = false;
-          let passionisDataLoaded = false;
+          setFinancialData(financialDataFromDB);
+          setToursData(toursDataFromDB);
+          setCustomersData(customersDataFromDB);
 
-          if (financialDataFromDB && financialDataFromDB.length > 0) {
-            setFinancialData(financialDataFromDB);
-            financialLoaded = true;
-          }
-          if (toursDataFromDB && toursDataFromDB.length > 0) {
-            setToursData(toursDataFromDB);
-            toursLoaded = true;
-          }
-          if (customersDataFromDB && customersDataFromDB.length > 0) {
-            setCustomersData(customersDataFromDB);
-            customersLoaded = true;
-          }
-          // Passionis verileri yüklendiyse işaretle
-          if (destinationsFromDB && destinationsFromDB.length > 0 &&
-              activitiesFromDB && activitiesFromDB.length > 0 &&
-              providersFromDB && providersFromDB.length > 0) {
-            passionisDataLoaded = true;
-          }          // 2. Test verileri kaldırıldı - artık sadece gerçek Firebase verileri kullanılıyor
-          // Sample data yükleme sistemi DEVRE DIŞI BIRAKILDI
+          // Sadece rezervasyonları yükle
+          await loadReservations();
+
           console.log("Gerçek Firebase verilerine bağlanılıyor...");
-          
-          setSplashFinished(true);
         }
       } catch (error) {
         console.error("Veriler yüklenirken hata oluştu:", error);
+      } finally {
+        setIsLoading(false);
         setSplashFinished(true);
       }
     }
@@ -356,8 +300,19 @@ export default function Home() {
   const handleSplashFinish = () => {
     setCurrentView("main-dashboard")
   }
+  const navigateTo = (view: string, data?: any) => {
+    // Rezervasyon navigasyonu
+    if (view === "rezervasyon-form") {
+      setCurrentView("rezervasyon-form");
+      setEditingRecord(data); // Düzenleme verisini ayarla
+      return;
+    }
 
-  const navigateTo = (view: string) => {
+    if (view === "rezervasyon-liste") {
+      setCurrentView("rezervasyon-liste");
+      return;
+    }
+    
     // Sidebar'dan Döviz butonuna tıklanınca yönlendirme
     if (view === "currency") {
       setCurrentView("currency");
@@ -504,21 +459,36 @@ export default function Home() {
   if (currentView === "splash") {
     return <SplashScreen onFinish={handleSplashFinish} />
   }
-
+  // Rezervasyon düzenleme
+  const handleEditReservation = (reservation: Rezervasyon) => {
+    console.log('Rezervasyon düzenleniyor:', reservation);
+    setEditingReservation(reservation);
+    setCurrentView("rezervasyon-form");
+  };
+  // Rezervasyon düzenleme tamamlandığında
+  const handleReservationEditComplete = () => {
+    setEditingReservation(null);
+    setCurrentView("rezervasyon-liste");
+    // Rezervasyon listesi otomatik yenilenecek
+    toast({
+      title: "Başarılı",
+      description: "Rezervasyon başarıyla güncellendi!",
+    });
+  };
   return (
     <div className="flex min-h-screen">
       <Sidebar currentView={currentView} onNavigate={navigateTo} />
-      <div className="flex-1 flex flex-col min-h-screen">
+      <div className="flex-1 flex flex-col min-h-screen ml-64">
         <div className="flex-1">
           <Toaster />
 
-          {/* Ana içerik */}
-          {currentView === "main-dashboard" && (
+          {/* Ana içerik */}          {currentView === "main-dashboard" && (
             <MainDashboard
               onNavigate={navigateTo}
               financialData={financialData}
               toursData={toursData}
               customersData={customersData}
+              reservationsData={reservationsData}
             />
           )}
           {currentView === "financial-entry" && (
@@ -785,11 +755,34 @@ export default function Home() {
           )}          {currentView === "currency" && (
             <CurrencyView onClose={() => setCurrentView("dashboard")} />
           )}
+            {/* Rezervasyon Sistemi */}
+          {currentView === "rezervasyon-form" && (
+            <RezervasyonForm
+              mode={editingReservation ? 'edit' : 'create'}
+              reservationId={editingReservation?.id}
+              editData={editingReservation}
+              onNavigate={navigateTo}
+              onCancel={() => navigateTo('rezervasyon-liste')}
+              onEditComplete={handleReservationEditComplete}
+            />
+          )}
+            {currentView === "rezervasyon-liste" && (
+            <RezervasyonListe 
+              reservationsData={reservationsData}
+              isLoading={isLoading}
+              onAddNew={() => setCurrentView("rezervasyon-form")}
+              onEdit={(reservation) => {
+                setEditingReservation(reservation);
+                setCurrentView("rezervasyon-form");
+              }}
+              onRefresh={loadReservations}
+            />
+          )}
 
           {/* Yeni eklenen bileşenler */}
           {currentView === "companies" && (
             <CompanyManagement />
-          )}          {currentView === "debts" && (
+          )}{currentView === "debts" && (
             <BorclarPage />
           )}          {currentView === "payments" && (
             <PaymentManagement />

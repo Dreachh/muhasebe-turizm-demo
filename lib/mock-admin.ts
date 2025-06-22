@@ -5,7 +5,7 @@
 const mockAdminCredentials = {
   username: "admin",
   password: "Passionis123", 
-  email: "passionistravell@gmail.com",
+  email: "info@nehirtravel.com",
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString()
 };

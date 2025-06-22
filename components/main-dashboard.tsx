@@ -1,8 +1,8 @@
 "use client"
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { DollarSign, Users, Calendar, Globe, FileText, BarChart2, Settings, Save, Wallet } from "lucide-react"
+import { DollarSign, Users, Calendar, Globe, FileText, BarChart2, Settings, Save, BookOpen, MapPin, Clock, Phone } from "lucide-react"
 import { formatCurrency, formatCurrencyGroups, calculateTourExpenses, calculateTourTotals, calculateTourProfit } from "@/lib/data-utils"
 import { Button } from "@/components/ui/button"
 import { DatePickerWithRange } from "@/components/ui/date-range-picker"
@@ -11,6 +11,9 @@ import { DateRange } from "react-day-picker"
 import { format } from "date-fns"
 import { tr } from "date-fns/locale"
 import { fetchExchangeRates } from "@/lib/currency-service"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Badge } from "@/components/ui/badge"
+import { getDestinations, getTourTemplates } from "@/lib/db-firebase"
 
 // Currency display style
 import styles from "./money-display.module.css";
@@ -135,6 +138,7 @@ interface MainDashboardProps {
   financialData?: FinancialData[];
   toursData?: TourData[];
   customersData?: CustomerData[];
+  reservationsData?: any[]; // Rezervasyon verileri için yeni prop
 }
 
 // finance.amount'ın string olup olmadığını kontrol et, değilse 0 döndür
@@ -142,12 +146,80 @@ const getFinanceAmount = (amount: unknown): number => {
   if (typeof amount === "string") {
     return parseFloat(amount.replace(/[^\d.-]/g, ""));
   } else if (typeof amount === "number") {
-    return amount;
-  }
+    return amount;  }
   return 0;
 };
 
-export function MainDashboard({ onNavigate, financialData = [], toursData = [], customersData = [] }: MainDashboardProps) {
+// Helper functions for reservations table
+const formatCurrencyLocal = (amount: string | number, currency: string) => {
+  const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+  if (isNaN(numAmount)) return amount;
+  
+  const formatted = numAmount.toLocaleString('tr-TR', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2
+  });
+  
+  if (currency === 'EUR') {
+    return `${formatted} €`;
+  } else if (currency === 'USD') {
+    return `${formatted} $`;
+  } else if (currency === 'TRY' || currency === 'TL') {
+    return `${formatted} ₺`;
+  }
+  return `${formatted} ${currency}`;
+}
+
+const splitCustomerName = (fullName: string) => {
+  if (!fullName) return { line1: '', line2: '' };
+  
+  const words = fullName.trim().split(' ');
+  if (words.length <= 2) {
+    return { line1: fullName, line2: '' };
+  }
+  
+  const midpoint = Math.ceil(words.length / 2);
+  const line1 = words.slice(0, midpoint).join(' ');
+  const line2 = words.slice(midpoint).join(' ');
+  
+  return { line1, line2 };
+}
+
+const formatPhoneNumber = (phone: string) => {
+  if (!phone) return { line1: '', line2: '' };
+  
+  // Eğer telefon numarası çok uzunsa, böl
+  if (phone.length > 15) {
+    const midpoint = Math.ceil(phone.length / 2);
+    return {
+      line1: phone.substring(0, midpoint),
+      line2: phone.substring(midpoint)
+    };
+  }
+  
+  return { line1: phone, line2: '' };
+}
+
+const getStatusBadge = (status: string) => {
+  switch (status) {
+    case "tamamlandı":
+    case "completed":
+      return <Badge className="bg-green-100 text-green-800 text-xs px-2 py-1">Tamamlandı</Badge>;
+    case "beklemede":
+    case "pending":
+      return <Badge className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1">Beklemede</Badge>;
+    case "kısmi":
+    case "partial":
+      return <Badge className="bg-blue-100 text-blue-800 text-xs px-2 py-1">Kısmi</Badge>;
+    case "iade":
+    case "refunded":
+      return <Badge className="bg-red-100 text-red-800 text-xs px-2 py-1">İade</Badge>;
+    default:
+      return <Badge className="bg-gray-100 text-gray-800 text-xs px-2 py-1">{status || "Bilinmiyor"}</Badge>;
+  }
+}
+
+export function MainDashboard({ onNavigate, financialData = [], toursData = [], customersData = [], reservationsData = [] }: MainDashboardProps) {
   // Döviz kurları için state'ler
   const [rates, setRates] = useState<Rate[]>([]);
   const [isLoadingRates, setIsLoadingRates] = useState(false);
@@ -301,14 +373,46 @@ export function MainDashboard({ onNavigate, financialData = [], toursData = [], 
   const PAGE_SIZE = 6;
   const [currentPage, setCurrentPage] = useState(1);
   const [currentFinancialPage, setCurrentFinancialPage] = useState(1);
-  
-  // Tur satışları için tarih filtresi
+    // Tur satışları için tarih filtresi
   const [tourDateRange, setTourDateRange] = useState<DateRange | undefined>();
   const [isTourDateFilterActive, setIsTourDateFilterActive] = useState(false);
 
   // Finansal kayıtlar için tarih filtresi
   const [financialDateRange, setFinancialDateRange] = useState<DateRange | undefined>();
   const [isFinancialDateFilterActive, setIsFinancialDateFilterActive] = useState(false);
+    const [reservationDateRange, setReservationDateRange] = useState<DateRange | undefined>();
+  const [isReservationDateFilterActive, setIsReservationDateFilterActive] = useState(false);
+  // Data for resolving IDs to names
+  const [destinations, setDestinations] = useState<any[]>([]);
+  const [tourTemplates, setTourTemplates] = useState<any[]>([]);
+
+  // Load destinations and tour templates for ID resolution
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const [destinationsData, templatesData] = await Promise.all([
+          getDestinations(),
+          getTourTemplates()
+        ]);
+        setDestinations(destinationsData);
+        setTourTemplates(templatesData);
+      } catch (error) {
+        console.error('Error loading data:', error);
+      }
+    };
+    loadData();
+  }, []);
+
+  // Helper functions to resolve IDs to names
+  const getDestinationName = (destinationId: string) => {
+    const destination = destinations.find(d => d.id === destinationId);
+    return destination ? destination.name : destinationId;
+  };
+
+  const getTourTemplateName = (templateId: string) => {
+    const template = tourTemplates.find(t => t.id === templateId);
+    return template ? (template.name || template.title || templateId) : templateId;
+  };
 
   // Tur ve finans verilerini birleştir ve tarihe göre sırala
   const combinedTransactions = (() => {
@@ -491,80 +595,91 @@ export function MainDashboard({ onNavigate, financialData = [], toursData = [], 
     }
     
     return formatCurrencyGroups(totals);
+  };  // Helper function to format phone numbers for 2-line display
+  const formatPhoneNumber = (phone: string | undefined) => {
+    if (!phone) return { line1: "+90", line2: "" };
+    
+    // Remove all non-digit characters except +
+    const cleaned = phone.replace(/[^\d+]/g, '');
+    
+    // If it doesn't start with +90, assume it's a Turkish number
+    let number = cleaned;
+    if (!number.startsWith('+90')) {
+      if (number.startsWith('90')) {
+        number = '+' + number;
+      } else if (number.startsWith('0')) {
+        number = '+90' + number.substring(1);
+      } else {
+        number = '+90' + number;
+      }
+    }
+    
+    // Split into 2 lines: +90 545 on first line, rest on second line
+    if (number.length >= 13) {
+      const formatted = number.replace(/(\+90)(\d{3})(\d{3})(\d{2})(\d{2})/, '$1 $2|$3 $4 $5');
+      const parts = formatted.split('|');
+      return { line1: parts[0], line2: parts[1] || "" };
+    }
+    
+    return { line1: number, line2: "" };
+  };
+
+  // Helper function to split customer name into 2 lines
+  const splitCustomerName = (fullName: string) => {
+    if (!fullName) return { line1: "", line2: "" };
+    
+    const words = fullName.split(' ');
+    if (words.length <= 2) {
+      return { line1: words[0] || "", line2: words[1] || "" };
+    }
+    
+    const midPoint = Math.ceil(words.length / 2);
+    const line1 = words.slice(0, midPoint).join(' ');
+    const line2 = words.slice(midPoint).join(' ');
+    
+    return { line1, line2 };
+  };
+
+  // Helper function to format currency
+  const formatCurrencyLocal = (amount: string | number, currency: string) => {
+    const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+    if (isNaN(numAmount)) return amount;
+    
+    const formatted = numAmount.toLocaleString('tr-TR', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2
+    });
+    
+    if (currency === 'EUR') {
+      return `${formatted} €`;
+    } else if (currency === 'USD') {
+      return `${formatted} $`;
+    } else if (currency === 'TRY' || currency === 'TL') {
+      return `${formatted} ₺`;
+    }
+    return `${formatted} ${currency}`;
+  };
+
+  // Status badge function like in rezervasyon-liste
+  const getStatusBadge = (status: string) => {
+    const statusConfig = {
+      "Ödendi": "bg-green-100 text-green-800",
+      "Bekliyor": "bg-yellow-100 text-yellow-800", 
+      "Kısmi Ödendi": "bg-blue-100 text-blue-800",
+      "İptal": "bg-red-100 text-red-800"
+    } as const
+    
+    const className = statusConfig[status as keyof typeof statusConfig] || statusConfig["Bekliyor"]
+    return <Badge className={className}>{status}</Badge>
   };
 
   // Ana ekranda sadece göstergeler olacak, menü butonları kaldırıldı
-
   return (
     <div className="space-y-4 sm:space-y-6 w-full max-w-[1350px] mx-auto px-4 sm:px-6 lg:px-8 mt-6 sm:mt-10">
       {/* İstatistik Kartları */}
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
-        {/* Finansal Gelir */}
-        <Card className="border-l-4 border-l-green-500">
-          <CardContent className="pt-3 pb-4 sm:pb-6 px-3 sm:px-4 relative">
-            <div className="flex flex-col items-start justify-start pt-0">
-              <div>
-                <div className="flex items-center space-x-2 mb-2">
-                  <span className="bg-green-100 p-1.5 sm:p-2 rounded-full flex-shrink-0"><DollarSign className="h-3 w-3 sm:h-4 sm:w-4 text-green-500" /></span>
-                  <div className="min-w-0">
-                    <h3 className="text-xs sm:text-sm font-bold text-muted-foreground text-left whitespace-nowrap">Finansal Gelir</h3>
-                    <p className="text-xs font-normal text-muted-foreground -mt-0.5 whitespace-nowrap">(Tüm Kayıtlar)</p>
-                  </div>
-                </div>
-                <div>
-                  <p className="text-lg sm:text-xl font-bold text-green-600" dangerouslySetInnerHTML={{ __html: formatCurrencyGroups(incomeByCurrency) }} />
-                </div>
-              </div>
-              
-            </div>
-          </CardContent>
-        </Card>
-        {/* Şirket Giderleri */}
-        <Card className="border-l-4 border-l-red-500">
-          <CardContent className="pt-3 pb-4 sm:pb-6 px-3 sm:px-4 relative">
-            <div className="flex flex-col items-start justify-start pt-0">
-              <div>
-                <div className="flex items-center space-x-2 mb-2">
-                  <span className="bg-red-100 p-1.5 sm:p-2 rounded-full flex-shrink-0"><DollarSign className="h-3 w-3 sm:h-4 sm:w-4 text-red-500" /></span>
-                  <div className="min-w-0">
-                    <h3 className="text-xs sm:text-sm font-bold text-muted-foreground text-left whitespace-nowrap">Şirket Giderleri</h3>
-                    <p className="text-xs font-normal text-muted-foreground -mt-0.5 whitespace-nowrap">(Tüm Kayıtlar)</p>
-                  </div>
-                </div>
-                <div>
-                  <p className="text-lg sm:text-xl font-bold text-red-600" dangerouslySetInnerHTML={{ __html: formatCurrencyGroups(expenseByCurrency) }} />
-                </div>
-              </div>
-              
-            </div>
-          </CardContent>
-        </Card>
-        {/* Kasa */}
-        <Card className="border-l-4 border-l-green-500">
-          <CardContent className="pt-3 pb-4 sm:pb-6 px-3 sm:px-4 relative">
-            <div className="flex flex-col items-start justify-start pt-0">
-              <div>
-                <div className="flex items-center space-x-2 mb-2">
-                  <span className="bg-green-100 p-1.5 sm:p-2 rounded-full flex-shrink-0"><Wallet className="h-3 w-3 sm:h-4 sm:w-4 text-green-500" /></span>
-                  <div className="min-w-0">
-                    <h3 className="text-xs sm:text-sm font-bold text-muted-foreground text-left whitespace-nowrap">Kasa</h3>
-                    <p className="text-xs font-normal text-muted-foreground -mt-0.5 whitespace-nowrap">(Net Toplam)</p>
-                  </div>
-                </div>
-                <div className="text-lg sm:text-2xl font-bold">
-                  {Object.keys(cashBoxByCurrency).length > 0 ? (
-                    <div dangerouslySetInnerHTML={{ __html: formatCurrencyGroups(cashBoxByCurrency) }} className="text-green-700" />
-                  ) : (
-                    <span className="text-green-700">0 ₺</span>
-                  )}
-                </div>
-              </div>
-              
-            </div>
-          </CardContent>
-        </Card>
-        {/* Döviz Kurları */}
-        <Card className="border-l-4 border-l-fuchsia-500">
+        {/* Döviz Kurları - En sola taşındı */}
+        <Card className="border-l-4 border-l-fuchsia-500 cursor-pointer hover:shadow-md transition-shadow" onClick={() => onNavigate("currency")}>
           <CardContent className="pt-2 pb-3 px-2 relative">
             <div className="flex flex-col items-start justify-start pt-0">
               <div className="w-full">
@@ -608,16 +723,83 @@ export function MainDashboard({ onNavigate, financialData = [], toursData = [], 
                                 </div>
                               );
                             })}
-                          </div>
-                        ) : (
+                          </div>                        ) : (
                           <div className="text-xs sm:text-sm text-muted-foreground px-2">Kurlar yüklenemedi</div>
                         )}
               </div>
             </div>
           </CardContent>
         </Card>
-        {/* Toplam Tur Satışı */}
-        <Card className="border-l-4 border-l-blue-500">
+
+        {/* Takvim Kartı */}
+        <Card className="border-l-4 border-l-orange-500 cursor-pointer hover:shadow-md transition-shadow" onClick={() => onNavigate("calendar")}>
+          <CardContent className="pt-2 pb-3 px-2 relative">
+            <div className="flex flex-col items-start justify-start pt-0">
+              <div className="w-full">
+                <div className="flex items-center space-x-2 sm:space-x-3 mb-2 px-2">
+                  <span className="bg-orange-100 p-1.5 sm:p-2 rounded-full flex-shrink-0">
+                    <Calendar className="h-3 w-3 sm:h-4 sm:w-4 text-orange-500" />
+                  </span>
+                  <div className="min-w-0">
+                    <h3 className="text-xs sm:text-base font-bold text-muted-foreground text-left whitespace-nowrap">
+                      {format(new Date(), "MMMM yyyy", { locale: tr })}
+                    </h3>
+                  </div>
+                </div>
+                
+                {/* Mini Takvim */}
+                <div className="grid grid-cols-7 gap-0.5 text-[10px] px-2">
+                  {['Pt', 'Sa', 'Ça', 'Pe', 'Cu', 'Ct', 'Pa'].map((day) => (
+                    <div key={day} className="text-center text-gray-500 font-medium py-0.5">
+                      {day}
+                    </div>
+                  ))}
+                  
+                  {(() => {
+                    const today = new Date();
+                    const currentMonth = today.getMonth();
+                    const currentYear = today.getFullYear();
+                    const firstDay = new Date(currentYear, currentMonth, 1);
+                    const lastDay = new Date(currentYear, currentMonth + 1, 0);
+                    const startDate = new Date(firstDay);
+                    startDate.setDate(startDate.getDate() - ((firstDay.getDay() + 6) % 7));
+                    
+                    const days = [];
+                    for (let i = 0; i < 35; i++) { // 5 hafta yeterli
+                      const date = new Date(startDate);
+                      date.setDate(startDate.getDate() + i);
+                      
+                      const isCurrentMonth = date.getMonth() === currentMonth;
+                      const isToday = date.toDateString() === today.toDateString();
+                      
+                      days.push(
+                        <div
+                          key={i}
+                          className={`text-center py-0.5 ${
+                            isCurrentMonth 
+                              ? isToday 
+                                ? 'bg-orange-500 text-white rounded-sm font-bold text-[9px]'
+                                : 'text-gray-800 text-[9px]'
+                              : 'text-gray-300 text-[9px]'
+                          }`}
+                        >
+                          {date.getDate()}
+                        </div>
+                      );
+                      
+                      if (date > lastDay && i > 27) break; // Gereksiz satırları engelle
+                    }
+                    
+                    return days;
+                  })()}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Toplam Tur Satışı - Bu kart tur verilerini kullanıyor */}
+        <Card className="border-l-4 border-l-blue-500 cursor-pointer hover:shadow-md transition-shadow" onClick={() => onNavigate("data-view")}>
           <CardContent className="pt-3 pb-4 sm:pb-6 px-3 sm:px-4 relative">
             <div className="flex flex-col items-start justify-start pt-0">
               <div>
@@ -628,30 +810,498 @@ export function MainDashboard({ onNavigate, financialData = [], toursData = [], 
                     <p className="text-xs font-normal text-muted-foreground -mt-0.5 whitespace-nowrap">Tur Satışı</p>
                   </div>
                 </div>
-                <p className="text-lg sm:text-xl font-bold">{totalCustomers}</p>
+                <div>
+                  <p className="text-lg sm:text-xl font-bold text-blue-600">{toursData.length}</p>
+                </div>
               </div>
-              
             </div>
           </CardContent>
         </Card>
-        {/* Yaklaşan Turlar */}
-        <Card className="border-l-4 border-l-amber-500">
+
+        {/* Yaklaşan Turlar - Mevcut kart korundu */}
+        <Card className="border-l-4 border-l-yellow-500 cursor-pointer hover:shadow-md transition-shadow" onClick={() => onNavigate("data-view")}>
           <CardContent className="pt-3 pb-4 sm:pb-6 px-3 sm:px-4 relative">
             <div className="flex flex-col items-start justify-start pt-0">
               <div>
                 <div className="flex items-center space-x-2 mb-2">
-                  <span className="bg-amber-100 p-1.5 sm:p-2 rounded-full flex-shrink-0"><Calendar className="h-3 w-3 sm:h-4 sm:w-4 text-amber-500" /></span>
+                  <span className="bg-yellow-100 p-1.5 sm:p-2 rounded-full flex-shrink-0"><Calendar className="h-3 w-3 sm:h-4 sm:w-4 text-yellow-500" /></span>
                   <div className="min-w-0">
                     <h3 className="text-xs sm:text-sm font-bold text-muted-foreground text-left whitespace-nowrap">Yaklaşan Turlar</h3>
-                    <p className="text-xs font-normal text-muted-foreground -mt-0.5 whitespace-nowrap truncate">(Bugünden Sonra)</p>
+                    <p className="text-xs font-normal text-muted-foreground -mt-0.5 whitespace-nowrap">(Bugünden Sonra)</p>
                   </div>
                 </div>
-                <p className="text-lg sm:text-xl font-bold">{upcomingTours.length}</p>
+                <div>
+                  <p className="text-lg sm:text-xl font-bold text-yellow-600">{upcomingTours.length}</p>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>        {/* Yaklaşan Rezervasyonlar - Son 3 Gün Uyarı Sistemi */}
+        <Card 
+          className="border-l-4 border-l-red-500 bg-red-50 cursor-pointer hover:shadow-md transition-shadow"
+          onClick={() => onNavigate("rezervasyon-liste")}
+        >
+          <CardContent className="pt-3 pb-4 sm:pb-6 px-3 sm:px-4 relative">
+            <div className="flex flex-col items-start justify-start pt-0">
+              <div className="w-full">
+                <div className="flex items-center space-x-2 mb-2">
+                  <span className="bg-red-100 p-1.5 sm:p-2 rounded-full flex-shrink-0">
+                    <Calendar className="h-3 w-3 sm:h-4 sm:w-4 text-red-500" />
+                  </span>                  <div className="min-w-0 overflow-hidden flex-1">
+                    <h3 className="text-[9px] sm:text-xs font-bold text-muted-foreground text-left truncate overflow-hidden">Yaklaşan</h3>
+                    <p className="text-[7px] sm:text-[9px] font-normal text-muted-foreground -mt-0.5 truncate overflow-hidden whitespace-nowrap">Rezervasyonlar (3 Gün)</p>
+                  </div>
+                </div>
+                
+                {(() => {
+                  const today = new Date();
+                  today.setHours(0, 0, 0, 0);
+                  
+                  const tomorrow = new Date(today);
+                  tomorrow.setDate(today.getDate() + 1);
+                  
+                  const dayAfterTomorrow = new Date(today);
+                  dayAfterTomorrow.setDate(today.getDate() + 2);
+                  
+                  const threeDaysLater = new Date(today);
+                  threeDaysLater.setDate(today.getDate() + 3);
+                  
+                  // Bugün ve yarın (1 gün kalan) - En acil
+                  const urgentReservations = reservationsData.filter((reservation: any) => {
+                    if (!reservation || !reservation.turTarihi) return false;
+                    const reservationDate = new Date(reservation.turTarihi);
+                    reservationDate.setHours(0, 0, 0, 0);
+                    return reservationDate >= today && reservationDate < tomorrow;
+                  });
+                  
+                  // 2. gün
+                  const moderateReservations = reservationsData.filter((reservation: any) => {
+                    if (!reservation || !reservation.turTarihi) return false;
+                    const reservationDate = new Date(reservation.turTarihi);
+                    reservationDate.setHours(0, 0, 0, 0);
+                    return reservationDate >= tomorrow && reservationDate < dayAfterTomorrow;
+                  });
+                  
+                  // 3. gün
+                  const lightReservations = reservationsData.filter((reservation: any) => {
+                    if (!reservation || !reservation.turTarihi) return false;
+                    const reservationDate = new Date(reservation.turTarihi);
+                    reservationDate.setHours(0, 0, 0, 0);
+                    return reservationDate >= dayAfterTomorrow && reservationDate < threeDaysLater;
+                  });
+                  
+                  const totalNext3Days = urgentReservations.length + moderateReservations.length + lightReservations.length;
+                  
+                  return (
+                    <div className="space-y-2">
+                      {/* Toplam sayı */}
+                      <div className="flex items-center gap-2">
+                        <p className="text-lg sm:text-xl font-bold text-red-600">
+                          {totalNext3Days}
+                        </p>
+                      </div>
+                      
+                      {/* Günlük breakdown */}
+                      <div className="space-y-1">
+                        {/* 1. gün (Bugün/Yarın) - En koyu kırmızı */}
+                        {urgentReservations.length > 0 && (
+                          <div className="flex items-center justify-between bg-red-700 text-white px-2 py-1 rounded text-xs animate-pulse">
+                            <span className="font-semibold">Bugün/Yarın:</span>
+                            <span className="font-bold">{urgentReservations.length} ACIL!</span>
+                          </div>
+                        )}
+                        
+                        {/* 2. gün - Orta kırmızı */}
+                        {moderateReservations.length > 0 && (
+                          <div className="flex items-center justify-between bg-red-500 text-white px-2 py-1 rounded text-xs">
+                            <span className="font-medium">2. Gün:</span>
+                            <span className="font-semibold">{moderateReservations.length}</span>
+                          </div>
+                        )}
+                        
+                        {/* 3. gün - Açık kırmızı */}
+                        {lightReservations.length > 0 && (
+                          <div className="flex items-center justify-between bg-red-300 text-red-800 px-2 py-1 rounded text-xs">
+                            <span className="font-medium">3. Gün:</span>
+                            <span className="font-semibold">{lightReservations.length}</span>
+                          </div>
+                        )}
+                        
+                        {/* Hiç rezervasyon yoksa */}
+                        {totalNext3Days === 0 && (
+                          <div className="text-xs text-gray-500 text-center py-1">
+                            Yaklaşan 3 günde rezervasyon yok
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           </CardContent>
         </Card>
-      </div>
+
+        {/* Toplam Rezervasyonlar */}
+        <Card className="border-l-4 border-l-green-500 cursor-pointer hover:shadow-md transition-shadow" onClick={() => onNavigate("rezervasyon-liste")}>
+          <CardContent className="pt-3 pb-4 sm:pb-6 px-3 sm:px-4 relative">
+            <div className="flex flex-col items-start justify-start pt-0">
+              <div>
+                <div className="flex items-center space-x-2 mb-2">
+                  <span className="bg-green-100 p-1.5 sm:p-2 rounded-full flex-shrink-0"><BookOpen className="h-3 w-3 sm:h-4 sm:w-4 text-green-500" /></span>
+                  <div className="min-w-0">
+                    <h3 className="text-xs sm:text-sm font-bold text-muted-foreground text-left whitespace-nowrap">Toplam</h3>
+                    <p className="text-xs font-normal text-muted-foreground -mt-0.5 whitespace-nowrap">Rezervasyonlar</p>
+                  </div>
+                </div>                <div>
+                  <p className="text-lg sm:text-xl font-bold text-green-600">
+                    {reservationsData.length}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>      {/* Rezervasyon Listesi */}
+      <Card className="mt-8">
+        <CardHeader className="pb-3">
+          <div className="flex flex-row items-start justify-between">
+            <div>
+              <CardTitle className="text-2xl font-bold text-[#00a1c6]">Rezervasyon Listesi</CardTitle>
+              <CardDescription className="text-sm text-muted-foreground">Son rezervasyonlar ve detaylar</CardDescription>
+            </div>
+            <div className="flex flex-col items-end gap-2">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="date-filter-reservations"
+                  checked={isReservationDateFilterActive}
+                  onCheckedChange={(checked) => setIsReservationDateFilterActive(checked === true)}
+                />
+                <label htmlFor="date-filter-reservations" className="text-sm font-medium text-muted-foreground">
+                  Tarih filtresini etkinleştir
+                </label>
+              </div>
+              <DatePickerWithRange
+                date={reservationDateRange}
+                setDate={setReservationDateRange}
+                className={!isReservationDateFilterActive ? "opacity-50 pointer-events-none" : ""}
+              />
+            </div>
+          </div>
+        </CardHeader>        <CardContent className="pt-0 pb-4">
+          <div className="overflow-x-auto">            <Table className="border-collapse table-auto w-full"><colgroup><col style={{width: '60px'}}/><col style={{width: '65px'}}/><col style={{width: '220px'}}/><col style={{width: '100px'}}/><col style={{width: '110px'}}/><col style={{width: '140px'}}/><col style={{width: '160px'}}/><col style={{width: '50px'}}/></colgroup><TableHeader><TableRow className="border-b-2 border-black bg-gray-100"><TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '60px'}}>Seri</TableHead><TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '65px'}}>Tarih</TableHead><TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '220px'}}>Tur Şablonu</TableHead><TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '100px'}}>Müşteri</TableHead><TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '110px'}}>İletişim</TableHead><TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '140px'}}>Alış Yeri</TableHead><TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '160px'}}>Firma</TableHead><TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '50px'}}>Kişi</TableHead><TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '110px'}}>Ödeme</TableHead><TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '80px'}}>Tutar</TableHead><TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '100px'}}>Alış</TableHead></TableRow></TableHeader><TableBody>
+                {(() => {
+                  // Rezervasyonları tarih filtresine göre filtrele
+                  let filteredReservations = [...reservationsData];
+                  if (isReservationDateFilterActive && reservationDateRange?.from) {
+                    filteredReservations = filteredReservations.filter(reservation => {
+                      if (!reservation.turTarihi) return false;
+                      
+                      const tourDate = new Date(reservation.turTarihi);
+                      const fromDate = reservationDateRange.from!;
+                      const toDate = reservationDateRange.to || reservationDateRange.from!;
+                      
+                      return tourDate >= fromDate && tourDate <= toDate;
+                    });
+                  }
+                  
+                  // Son 6 rezervasyonu göster (tarih sırasına göre)
+                  const sortedReservations = filteredReservations
+                    .sort((a, b) => {
+                      // Tur tarihine göre artan sıra: en yakın tarih en üstte
+                      const dateA = new Date(a.turTarihi).getTime();
+                      const dateB = new Date(b.turTarihi).getTime();
+                      if (isNaN(dateA) || isNaN(dateB)) return 0;
+                      return dateA - dateB;
+                    })
+                    .slice(0, 6); // Son 6 kayıt (en yakın tarihler)
+
+                  if (sortedReservations && sortedReservations.length > 0) {
+                    const rows: React.ReactElement[] = [];
+                      sortedReservations.forEach((reservation, index) => {
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      
+                      const tomorrow = new Date(today);
+                      tomorrow.setDate(today.getDate() + 1);
+                      
+                      const dayAfterTomorrow = new Date(today);
+                      dayAfterTomorrow.setDate(today.getDate() + 2);
+                      
+                      const threeDaysLater = new Date(today);
+                      threeDaysLater.setDate(today.getDate() + 3);
+                      
+                      const reservationDate = new Date(reservation.turTarihi);
+                      reservationDate.setHours(0, 0, 0, 0);
+                      
+                      // Yakınlık derecesine göre renklendirme (son 3 gün)
+                      let rowBgClass = index % 2 === 0 ? "" : "bg-gray-50"; // Varsayılan zebra
+                      let borderClass = "";
+                      
+                      if (reservationDate >= today && reservationDate < tomorrow) {
+                        // Bugün (1 gün kalan) - En koyu kırmızı
+                        rowBgClass = "bg-red-100 border-l-4 border-red-700";
+                        borderClass = "border-red-700";
+                      } else if (reservationDate >= tomorrow && reservationDate < dayAfterTomorrow) {
+                        // Yarın (2 gün kalan) - Orta kırmızı
+                        rowBgClass = "bg-red-75 border-l-4 border-red-500";
+                        borderClass = "border-red-500";
+                      } else if (reservationDate >= dayAfterTomorrow && reservationDate < threeDaysLater) {
+                        // Öbür gün (3 gün kalan) - Açık kırmızı
+                        rowBgClass = "bg-red-50 border-l-4 border-red-300";
+                        borderClass = "border-red-300";
+                      }
+
+                      // Ana rezervasyon satırı
+                      rows.push(
+                        <TableRow 
+                          key={`reservation-${reservation.id || index}`}
+                          className={`${rowBgClass} relative`}
+                        >
+                          <TableCell className="font-bold text-sm border-r border-gray-200 text-center align-top py-2 px-2" style={{width: '60px'}}>
+                            <div className="text-xs text-gray-500 leading-tight">RZV-</div>
+                            <div className="text-sm font-bold leading-tight">{reservation.seriNumarasi?.replace('RZV-', '') || '0001'}</div>
+                          </TableCell>
+                          <TableCell className="font-medium border-r border-gray-200 text-center align-top py-2 px-2" style={{width: '65px'}}>
+                            <div className="font-bold text-sm leading-tight">{format(new Date(reservation.turTarihi), "dd", { locale: tr })}</div>
+                            <div className="text-xs text-gray-500 leading-tight">{format(new Date(reservation.turTarihi), "MMM", { locale: tr })}</div>
+                          </TableCell>
+                          <TableCell className="border-r border-gray-200 align-top py-2 px-2" style={{width: '220px'}}>
+                            <div className="space-y-1">
+                              <div className="font-medium text-sm leading-tight">{getTourTemplateName(reservation.turSablonu)}</div>
+                              <div className="flex items-center gap-1 text-xs text-gray-500">
+                                <MapPin className="h-3 w-3 flex-shrink-0" />
+                                <span className="leading-tight">{getDestinationName(reservation.destinasyon)}</span>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="font-medium border-r border-gray-200 align-top py-2 px-2" style={{width: '100px'}}>
+                            <div className="space-y-1">
+                              <div className="text-sm font-medium leading-tight">{splitCustomerName(reservation.musteriAdiSoyadi).line1}</div>
+                              {splitCustomerName(reservation.musteriAdiSoyadi).line2 && (
+                                <div className="text-sm font-medium leading-tight">{splitCustomerName(reservation.musteriAdiSoyadi).line2}</div>
+                              )}
+                              {reservation.katilimcilar && reservation.katilimcilar.length > 0 && (
+                                <div className="text-xs text-gray-500 leading-tight">+{reservation.katilimcilar.length} katılımcı</div>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="border-r border-gray-200 text-center align-top py-2 px-2" style={{width: '110px'}}>
+                            <div className="text-sm space-y-1">
+                              <div className="font-medium leading-tight">{formatPhoneNumber(reservation.telefon).line1}</div>
+                              {formatPhoneNumber(reservation.telefon).line2 && (
+                                <div className="text-xs text-gray-600 leading-tight">{formatPhoneNumber(reservation.telefon).line2}</div>
+                              )}
+                            </div>
+                          </TableCell>                          <TableCell className="border-r border-gray-200 align-top py-2 px-2" style={{width: '140px'}}>
+                            <div className="space-y-1">
+                              <div className="font-medium text-sm leading-tight">{reservation.alisYeri}</div>
+                              <div className="text-xs text-gray-500 leading-tight">
+                                {reservation.alisYeri === "Acenta" ? (
+                                  reservation.alisDetaylari?.["Acenta Adı"] || reservation.firma || ""
+                                ) : reservation.alisYeri === "Otel" ? (
+                                  reservation.alisDetaylari?.["Otel Adı"] || ""
+                                ) : reservation.alisYeri === "Özel Adres" || reservation.alisYeri === "Buluşma Noktası" ? (
+                                  reservation.alisDetaylari?.["Adres"] ? 
+                                    (reservation.alisDetaylari["Adres"].length > 20 ? 
+                                      reservation.alisDetaylari["Adres"].substring(0, 20) + "..." : 
+                                      reservation.alisDetaylari["Adres"]) : ""
+                                ) : ""}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-sm border-r border-gray-200 align-top py-2 px-2" style={{width: '160px'}}>
+                            <div className="space-y-1">
+                              <div className="font-medium text-xs leading-tight">{reservation.firma}</div>
+                              <div className="text-xs text-gray-500 leading-tight">{reservation.yetkiliKisi}</div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="border-r border-gray-200 text-center align-top py-2 px-2" style={{width: '50px'}}>
+                            <div className="flex items-center justify-center gap-1 text-sm">
+                              <Users className="h-3 w-3 flex-shrink-0" />
+                              <span className="text-sm font-medium">
+                                {parseInt(reservation.yetiskinSayisi?.toString() || "0")}
+                                {parseInt(reservation.cocukSayisi?.toString() || "0") > 0 && `+${parseInt(reservation.cocukSayisi?.toString() || "0")}Ç`}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="border-r border-gray-200 align-top py-2 px-2" style={{width: '110px'}}>
+                            <div className="space-y-1">
+                              {getStatusBadge(reservation.odemeDurumu)}
+                              <div className="text-xs text-gray-500 leading-tight">
+                                {reservation.odemeYapan && (
+                                  <div>{reservation.odemeYapan}</div>
+                                )}
+                                {reservation.odemeYontemi && (
+                                  <div>{reservation.odemeYontemi}</div>
+                                )}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="font-medium border-r border-gray-200 text-right align-top py-2 px-2" style={{width: '80px'}}>
+                            <div className="text-sm font-medium leading-tight">{formatCurrencyLocal(reservation.tutar, reservation.paraBirimi)}</div>
+                          </TableCell>                          <TableCell className="border-r border-gray-200 text-center align-top py-2 px-2" style={{width: '100px'}}>
+                            <div className="text-sm space-y-1">
+                              {reservation.alisDetaylari && reservation.alisDetaylari["Alış Saati"] && (
+                                <div className="flex items-center justify-center gap-1 text-xs text-gray-500">
+                                  <Clock className="h-3 w-3 flex-shrink-0" />
+                                  <span className="leading-tight">{reservation.alisDetaylari["Alış Saati"]}</span>
+                                </div>
+                              )}
+                              
+                              {/* Alış yeri türüne göre farklı bilgiler */}
+                              {reservation.alisYeri === "Acenta" ? (
+                                <div className="text-xs text-gray-500 leading-tight">
+                                  {reservation.firma || "Acenta"}
+                                </div>
+                              ) : reservation.alisYeri === "Otel" ? (
+                                // Otel durumunda oda numarasını öncelik ver
+                                reservation.alisDetaylari && reservation.alisDetaylari["Oda Numarası"] ? (
+                                  <div className="text-xs text-gray-500 leading-tight">
+                                    Oda: {reservation.alisDetaylari["Oda Numarası"]}
+                                  </div>
+                                ) : (
+                                  <div className="text-xs text-gray-500 leading-tight">
+                                    {reservation.alisDetaylari?.["Otel Adı"] || "Otel"}
+                                  </div>
+                                )
+                              ) : reservation.alisYeri === "Özel Adres" || reservation.alisYeri === "Buluşma Noktası" ? (
+                                <div className="text-xs text-gray-500 leading-tight">
+                                  {reservation.alisDetaylari?.["Adres"] ? 
+                                    (reservation.alisDetaylari["Adres"].length > 15 ? 
+                                      reservation.alisDetaylari["Adres"].substring(0, 15) + "..." : 
+                                      reservation.alisDetaylari["Adres"]) : "Adres belirtilmemiş"}
+                                </div>
+                              ) : (
+                                <div className="text-xs text-gray-500 leading-tight">-</div>
+                              )}
+                            </div>                          </TableCell>
+                        </TableRow>
+                      );
+
+                      // Notlar ve Özel İstekler satırı (varsa)
+                      const getOzelIsteklerFromAlisYeri = (reservation: any) => {
+                        if (!reservation.alisYeri) return '';
+                        
+                        switch (reservation.alisYeri) {
+                          case 'Acenta':
+                            return reservation.alisDetaylari?.Adres || '';
+                          case 'Otel':
+                            return reservation.alisDetaylari?.['Özel Talimatlar'] || '';
+                          case 'Özel Adres':
+                          case 'Buluşma Noktası':
+                            return [
+                              reservation.alisDetaylari?.Adres && `Adres: ${reservation.alisDetaylari?.Adres}`,
+                              reservation.alisDetaylari?.['İletişim'] && `İletişim: ${reservation.alisDetaylari?.['İletişim']}`,
+                              reservation.alisDetaylari?.['Özel Talimatlar'] && `Talimatlar: ${reservation.alisDetaylari?.['Özel Talimatlar']}`
+                            ].filter(Boolean).join(' | ') || '';
+                          default:
+                            return '';
+                        }
+                      };
+
+                      const ozelIsteklerData = getOzelIsteklerFromAlisYeri(reservation);
+                      
+                      if (reservation.notlar || ozelIsteklerData) {
+                        rows.push(
+                          <TableRow key={`notes-${reservation.id || index}`} className="bg-gray-50 border-b border-black">
+                            <TableCell colSpan={11} className="p-0">
+                              <div className="flex h-1">
+                                <div className="w-1/2 border-r border-gray-300 flex items-center px-1">
+                                  {reservation.notlar ? (
+                                    <div className="flex items-center gap-1">
+                                      <div className="w-1 h-1 bg-blue-500 rounded-full flex-shrink-0"></div>
+                                      <span className="text-sm font-medium text-blue-800">Notlar:</span>
+                                      <span className="text-sm text-blue-700 truncate">{reservation.notlar}</span>
+                                    </div>
+                                  ) : (
+                                    <span className="text-sm text-gray-400">Notlar: -</span>
+                                  )}
+                                </div>
+                                <div className="w-1/2 flex items-center px-1">
+                                  {ozelIsteklerData ? (
+                                    <div className="flex items-center gap-1">
+                                      <div className="w-1 h-1 bg-red-500 rounded-full flex-shrink-0"></div>
+                                      <span className="text-sm font-medium text-red-800">Özel İstekler:</span>
+                                      <span className="text-sm text-red-700 truncate">{ozelIsteklerData}</span>
+                                    </div>
+                                  ) : (
+                                    <span className="text-sm text-gray-400">Özel İstekler: -</span>
+                                  )}
+                                </div>
+                              </div>                            </TableCell>
+                          </TableRow>
+                        );
+                      } else {
+                        // Notları olmayan rezervasyonlar için ayırıcı çizgi
+                        rows.push(
+                          <TableRow key={`separator-${reservation.id || index}`} className="border-b border-black">
+                            <TableCell colSpan={11} className="p-0 h-1"></TableCell>
+                          </TableRow>
+                        );
+                      }
+                    });
+
+                    return rows;
+                  } else {
+                    return (
+                      <TableRow>
+                        <TableCell colSpan={11} className="text-center py-12">
+                          <div className="flex flex-col items-center justify-center">
+                            <BookOpen className="w-12 h-12 text-gray-400 mb-3" />
+                            <h3 className="text-lg font-medium text-gray-900 mb-1">Henüz rezervasyon yok</h3>
+                            <p className="text-sm text-gray-500 mb-4">İlk rezervasyonunuzu oluşturmak için butona tıklayın</p>
+                            <Button 
+                              variant="default"
+                              size="sm"
+                              className="bg-[#00a1c6] hover:bg-[#008aa6] text-white"
+                              onClick={() => onNavigate("rezervasyon-form")}
+                            >
+                              Yeni Rezervasyon Ekle
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  }
+                })()}
+              </TableBody>
+            </Table>
+            {(isReservationDateFilterActive ? (reservationDateRange?.from ? [...reservationsData].filter(reservation => {
+              if (!reservation.turTarihi) return false;
+              const tourDate = new Date(reservation.turTarihi);
+              const fromDate = reservationDateRange.from!;
+              const toDate = reservationDateRange.to || reservationDateRange.from!;
+              return tourDate >= fromDate && tourDate <= toDate;
+            }) : []) : reservationsData).length > 0 && (
+              <>
+                <div className="border-t border-gray-200 w-full my-4"></div>
+                
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">
+                    Son 6 rezervasyon gösteriliyor (Toplam: {isReservationDateFilterActive ? (reservationDateRange?.from ? [...reservationsData].filter(reservation => {
+                      if (!reservation.turTarihi) return false;
+                      const tourDate = new Date(reservation.turTarihi);
+                      const fromDate = reservationDateRange.from!;
+                      const toDate = reservationDateRange.to || reservationDateRange.from!;
+                      return tourDate >= fromDate && tourDate <= toDate;
+                    }).length : 0) : reservationsData.length})
+                  </span>
+                  
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    className="border-[#00a1c6] text-[#00a1c6] hover:bg-[#00a1c6] hover:text-white"
+                    onClick={() => onNavigate("rezervasyon-liste")}
+                  >
+                    Tümünü Gör
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Son Tur Satışları */}
       <Card className="mt-8">
@@ -864,9 +1514,8 @@ export function MainDashboard({ onNavigate, financialData = [], toursData = [], 
                                 (Number(act.participants) || 0);
                               
                               // Aktivite toplam fiyatını ekle
-                              const activityTotal = actPrice * actParticipants;
-                              if (activityTotal > 0) {
-                                paidAmounts[actCurrency] = (paidAmounts[actCurrency] || 0) + activityTotal;
+                              if (actPrice > 0) {
+                                paidAmounts[actCurrency] = (paidAmounts[actCurrency] || 0) + actPrice * actParticipants;
                               }
                             });
                           }
@@ -1110,9 +1759,10 @@ export function MainDashboard({ onNavigate, financialData = [], toursData = [], 
                       Toplam {tourOnlyTransactions.length} tur satışından {Math.min(PAGE_SIZE, tourOnlyTransactions.length)} tanesi gösteriliyor
                     </span>
                     
-                    {/* Sayfalama */}
+                    {/* Sayfalama */ }
                     <div className="flex items-center">
                       {totalTourPages > 1 && (
+
                         <div className="flex justify-center items-center gap-2">
                           <Button 
                             variant="ghost" 
@@ -1222,6 +1872,7 @@ export function MainDashboard({ onNavigate, financialData = [], toursData = [], 
                         </span>
                         <span className={styles.amountValue}>
                           {amount.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                       
                         </span>
                       </span>
                     </div>

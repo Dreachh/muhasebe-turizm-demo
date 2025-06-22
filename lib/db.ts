@@ -21,8 +21,7 @@ import {
   getReferralSources as getFirestoreReferralSources,
   saveReferralSources as saveFirestoreReferralSources,
   getTourTemplates as getFirestoreTourTemplates,
-  saveTourTemplates as saveFirestoreTourTemplates,
-  getTourTemplate as getFirestoreTourTemplate,
+  saveTourTemplates as saveFirestoreTourTemplates,  getTourTemplate as getFirestoreTourTemplate,
   getCompanies as getFirestoreCompanies,
   getTourTemplatesByDestination as getFirestoreTourTemplatesByDestination,
   getTours as getFirestoreTours,
@@ -33,7 +32,7 @@ import {
 import { COLLECTIONS } from "./db-firebase";
 
 // Veritabanı adı ve sürümü (eski bilgileri koruyoruz)
-const DB_NAME = "passionistravelDB";
+const DB_NAME = "nehirtravelDB";
 const DB_VERSION = 3;
 
 // Store konfigürasyonu için arayüz tanımlaması (eski tanımlamaları koruyoruz)
@@ -372,3 +371,61 @@ export const getTourTemplate = async (id: string): Promise<any> => {
 
 // ID üretici fonksiyonunu dışa aktarıyoruz
 export { generateUUID };
+
+// ==================== REZERVASYON SİSTEMİ FONKSİYONLARI ====================
+
+// Rezervasyon sistemini db-firebase'den import et
+import {
+  getReservations as getFirestoreReservations,  saveReservation as saveFirestoreReservation,
+  deleteReservation as deleteFirestoreReservation,
+  getReservationById as getFirestoreReservationById,
+  updateReservation as updateFirestoreReservation,
+  getReservationSettings as getFirestoreReservationSettings,
+  saveReservationSettings as saveFirestoreReservationSettings,
+  getNextSerialNumber as getFirestoreNextSerialNumber,
+  incrementSerialNumber as incrementFirestoreSerialNumber,
+  updateSerialSettings as updateFirestoreSerialSettings
+} from "./db-firebase";
+
+// Rezervasyon CRUD işlemleri
+export const getReservations = async (): Promise<any[]> => {
+  return getFirestoreReservations();
+};
+
+export const saveReservation = async (reservation: any): Promise<boolean> => {
+  return saveFirestoreReservation(reservation);
+};
+
+export const getReservationById = async (id: string): Promise<any | null> => {
+  return getFirestoreReservationById(id);
+};
+
+export const updateReservation = async (id: string, reservation: any): Promise<boolean> => {
+  return updateFirestoreReservation(id, reservation);
+};
+
+export const deleteReservation = async (id: string): Promise<boolean> => {
+  return deleteFirestoreReservation(id);
+};
+
+// Rezervasyon ayarları
+export const getReservationSettings = async (type: string): Promise<any[]> => {
+  return getFirestoreReservationSettings(type);
+};
+
+export const saveReservationSettings = async (type: string, data: any[]): Promise<boolean> => {
+  return saveFirestoreReservationSettings(type, data);
+};
+
+// Seri numarası işlemleri
+export const getNextSerialNumber = async (): Promise<string> => {
+  return getFirestoreNextSerialNumber();
+};
+
+export const incrementSerialNumber = async (): Promise<void> => {
+  return incrementFirestoreSerialNumber();
+};
+
+export const updateSerialSettings = async (settings: any): Promise<boolean> => {
+  return updateFirestoreSerialSettings(settings);
+};

@@ -18,7 +18,7 @@ export const ALLOWED_EMAILS = [
   "admin@passionis.com",
   "info@passionis.com",
   "passionisistravel@gmail.com",
-  "passionistravell@gmail.com", // Eklenmiş giriş e-postası
+  "info@nehirtravel.com", // Eklenmiş giriş e-postası
   // Bu listeyi ihtiyacınıza göre düzenleyebilirsiniz
 ];
 

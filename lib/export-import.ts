@@ -127,7 +127,7 @@ import { openDB, getAllData } from './db';
 // Tüm veritabanı depolarını dışa aktarma işlemi
 export const exportAllData = async (): Promise<{ [key: string]: any[] }> => {
   // DB_NAME ve STORES değerlerini db.ts dosyasından alıyoruz 
-  const DB_NAME = "passionistravelDB";
+  const DB_NAME = "nehirtravelDB";
   const STORES = {
     tours: { keyPath: "id", indexes: ["customerName", "tourDate"] },
     financials: { keyPath: "id", indexes: ["date", "type"] },

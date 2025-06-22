@@ -32,9 +32,16 @@ import {
   DialogClose
 } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { useToast } from "@/components/ui/use-toast"
 import { Building, Plus, PenSquare, Trash2, Phone, Mail, FileText } from "lucide-react"
-import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, getDoc } from "firebase/firestore"
+import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, getDoc, setDoc, writeBatch } from "firebase/firestore"
 import { getDb } from "../lib/firebase-client-module"
 import { COLLECTIONS } from "../lib/db-firebase"
 import { generateUUID } from "../lib/utils"
@@ -49,6 +56,7 @@ interface Company {
   address?: string;
   notes?: string;
   taxId?: string;
+  category?: string; // Yeni eklenen kategori alanı
   createdAt: Date;
   updatedAt: Date;
 }
@@ -58,10 +66,18 @@ export default function CompanyManagement() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [formMode, setFormMode] = useState<'add' | 'edit'>('add');
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [currentCompany, setCurrentCompany] = useState<Company | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);  const [currentCompany, setCurrentCompany] = useState<Company | null>(null);
   const [backupData, setBackupData] = useState<any>(null);
   const [dbRepairDialogOpen, setDbRepairDialogOpen] = useState(false);
+    // Kategori yönetimi için state'ler
+  const [categories, setCategories] = useState<string[]>([
+    "Otel", "Acenta", "Restaurant", "Müze", "Aktivite Sağlayıcısı", 
+    "Ulaşım", "Hizmet Sağlayıcısı", "Diğer"
+  ]);
+  const [newCategory, setNewCategory] = useState<string>("");
+  const [showNewCategoryInput, setShowNewCategoryInput] = useState(false);
+  const [showCategoryManager, setShowCategoryManager] = useState(false);
+  
   const [formData, setFormData] = useState<Partial<Company>>({
     name: "",
     contactPerson: "",
@@ -69,8 +85,34 @@ export default function CompanyManagement() {
     email: "",
     address: "",
     notes: "",
-    taxId: ""
-  });// Firmaları Firebase'den yükle
+    taxId: "",
+    category: ""
+  });
+
+  // Telefon formatlaması fonksiyonu
+  const formatPhoneNumber = (value: string) => {
+    // Sadece rakamları al
+    const digits = value.replace(/\D/g, '')
+
+    // Türkiye formatında formatlama (+90 5XX XXX XX XX)
+    if (digits.length === 0) return ''
+    if (digits.length <= 2) return `+${digits}`
+    if (digits.length <= 5) return `+${digits.slice(0, 2)} ${digits.slice(2)}`
+    if (digits.length <= 8) return `+${digits.slice(0, 2)} ${digits.slice(2, 5)} ${digits.slice(5)}`
+    if (digits.length <= 10) return `+${digits.slice(0, 2)} ${digits.slice(2, 5)} ${digits.slice(5, 8)} ${digits.slice(8)}`
+    return `+${digits.slice(0, 2)} ${digits.slice(2, 5)} ${digits.slice(5, 8)} ${digits.slice(8, 10)} ${digits.slice(10, 12)}`
+  }
+
+  // Telefon input'u için key press handler
+  const handlePhoneKeyPress = (e: React.KeyboardEvent) => {
+    // Sadece rakam, backspace, delete, tab ve arrow tuşlarına izin ver
+    const allowedKeys = ['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown']
+    if (!allowedKeys.includes(e.key) && !/[0-9]/.test(e.key)) {
+      e.preventDefault()
+    }
+  }
+
+  // Firmaları Firebase'den yükle
   const loadCompanies = async () => {
     try {
       setLoading(true);
@@ -92,8 +134,7 @@ export default function CompanyManagement() {
         if (!data || !data.name) {
           console.warn(`Eksik veri, belge ID: ${doc.id}`, data);
         }
-        
-        // "deleted" tipindeki firmalar görüntülenmeyecek
+          // "deleted" tipindeki firmalar görüntülenmeyecek
         if (data.type !== "deleted") {
           companiesList.push({
             id: doc.id,
@@ -104,6 +145,7 @@ export default function CompanyManagement() {
             address: data.address || "",
             notes: data.notes || "",
             taxId: data.taxId || "",
+            category: data.category || "", // Category alanını ekle
             createdAt: data.createdAt?.toDate() || new Date(),
             updatedAt: data.updatedAt?.toDate() || new Date()
           });
@@ -299,14 +341,119 @@ export default function CompanyManagement() {
       });
     } finally {
       setLoading(false);
+    }  };
+    // Yeni kategori ekleme fonksiyonu
+  const addNewCategory = () => {
+    if (newCategory.trim() && !categories.includes(newCategory.trim())) {
+      const updatedCategories = [...categories, newCategory.trim()];
+      setCategories(updatedCategories);
+      setFormData({ ...formData, category: newCategory.trim() });
+      setNewCategory("");
+      setShowNewCategoryInput(false);
+      
+      // Kategorileri localStorage'a kaydet
+      localStorage.setItem('companyCategories', JSON.stringify(updatedCategories));
+      
+      toast({
+        title: "Başarılı!",
+        description: "Yeni kategori eklendi.",
+      });
+    } else if (categories.includes(newCategory.trim())) {
+      toast({
+        title: "Uyarı",
+        description: "Bu kategori zaten mevcut.",
+        variant: "destructive"
+      });
     }
   };
-  // Form alanlarının değişikliklerini izle
+
+  // Kategori silme fonksiyonu
+  const deleteCategory = async (categoryToDelete: string) => {
+    try {
+      const db = getDb();
+      
+      // Önce bu kategoriye sahip firma var mı kontrol et
+      const companiesRef = collection(db, COLLECTIONS.COMPANIES);
+      const querySnapshot = await getDocs(companiesRef);
+      
+      let hasCompaniesWithCategory = false;
+      let companyCount = 0;
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        if (data.category === categoryToDelete && data.type !== "deleted") {
+          hasCompaniesWithCategory = true;
+          companyCount++;
+        }
+      });
+
+      if (hasCompaniesWithCategory) {
+        const confirmDelete = window.confirm(
+          `"${categoryToDelete}" kategorisinde ${companyCount} firma bulunmaktadır. Bu kategoriyi silmek istediğinizden emin misiniz? Bu firmaların kategorisi boş kalacaktır.`
+        );
+        
+        if (!confirmDelete) return;
+
+        // Bu kategorideki firmaların kategorisini temizle
+        const batch = writeBatch(db);
+        querySnapshot.forEach((docSnap) => {
+          const data = docSnap.data();
+          if (data.category === categoryToDelete && data.type !== "deleted") {
+            const docRef = doc(db, COLLECTIONS.COMPANIES, docSnap.id);
+            batch.update(docRef, { category: "", updatedAt: new Date() });
+          }
+        });
+        await batch.commit();
+      }
+
+      // Kategoriyi listeden kaldır
+      const updatedCategories = categories.filter(cat => cat !== categoryToDelete);
+      setCategories(updatedCategories);
+      
+      // localStorage'a kaydet
+      localStorage.setItem('companyCategories', JSON.stringify(updatedCategories));
+
+      toast({
+        title: "Başarılı!",
+        description: `"${categoryToDelete}" kategorisi silindi.${hasCompaniesWithCategory ? ` ${companyCount} firmanın kategorisi temizlendi.` : ""}`,
+      });
+
+      // Firmaları yeniden yükle
+      loadCompanies();
+    } catch (error) {
+      console.error("Kategori silinirken hata:", error);
+      toast({
+        title: "Hata!",
+        description: "Kategori silinirken bir hata oluştu.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Kategorileri localStorage'dan yükleme
+  const loadCategories = () => {
+    const savedCategories = localStorage.getItem('companyCategories');
+    if (savedCategories) {
+      try {
+        const parsedCategories = JSON.parse(savedCategories);
+        setCategories(parsedCategories);
+      } catch (error) {
+        console.error('Kategoriler yüklenirken hata:', error);
+      }
+    }
+  };
+    // Form alanlarının değişikliklerini izle
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
+    let formattedValue = value;
+    
+    // Telefon alanı için özel formatla
+    if (name === "phone") {
+      formattedValue = formatPhoneNumber(value);
+    }
+    
     setFormData((prev) => ({
       ...prev,
-      [name]: value
+      [name]: formattedValue
     }));
   };
   // Firma ekle veya güncelle
@@ -365,7 +512,6 @@ export default function CompanyManagement() {
       });
     }
   };
-
   // Firma düzenleme modunu aç
   const handleEditCompany = (company: Company) => {
     setFormMode('edit');
@@ -377,7 +523,8 @@ export default function CompanyManagement() {
       email: company.email,
       address: company.address,
       notes: company.notes,
-      taxId: company.taxId
+      taxId: company.taxId,
+      category: company.category
     });
     setDialogOpen(true);
   };
@@ -429,22 +576,24 @@ export default function CompanyManagement() {
   // Yeni firma ekleme modunu aç
   const openAddDialog = () => {
     setFormMode('add');
-    setCurrentCompany(null);
-    setFormData({
+    setCurrentCompany(null);    setFormData({
       name: "",
       contactPerson: "",
       phone: "",
       email: "",
       address: "",
       notes: "",
-      taxId: ""
+      taxId: "",
+      category: ""
     });
+    setShowNewCategoryInput(false);
+    setNewCategory("");
     setDialogOpen(true);
   };
-
   // Component yüklendiğinde firmaları getir
   useEffect(() => {
     loadCompanies();
+    loadCategories(); // Kategorileri de yükle
   }, []);
 
   return (
@@ -468,10 +617,10 @@ export default function CompanyManagement() {
             </div>
           ) : (
             <Table>
-              <TableCaption>Toplam {companies.length} firma</TableCaption>
-              <TableHeader>
+              <TableCaption>Toplam {companies.length} firma</TableCaption>              <TableHeader>
                 <TableRow>
                   <TableHead>Firma Adı</TableHead>
+                  <TableHead>Kategori</TableHead>
                   <TableHead>İletişim Kişisi</TableHead>
                   <TableHead>Telefon</TableHead>
                   <TableHead>E-posta</TableHead>
@@ -482,7 +631,7 @@ export default function CompanyManagement() {
               <TableBody>
                 {companies.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center">
+                    <TableCell colSpan={7} className="text-center">
                       Henüz kayıtlı firma bulunmamaktadır
                     </TableCell>
                   </TableRow>
@@ -490,6 +639,7 @@ export default function CompanyManagement() {
                   companies.map((company) => (
                     <TableRow key={company.id}>
                       <TableCell className="font-medium">{company.name}</TableCell>
+                      <TableCell>{company.category || "-"}</TableCell>
                       <TableCell>{company.contactPerson || "-"}</TableCell>
                       <TableCell>{company.phone || "-"}</TableCell>
                       <TableCell>{company.email || "-"}</TableCell>
@@ -529,8 +679,7 @@ export default function CompanyManagement() {
               Firma bilgilerini buradan ekleyip güncelleyebilirsiniz.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
+          <div className="grid gap-4 py-4">            <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="name" className="text-right">
                 Firma Adı
               </Label>
@@ -542,6 +691,78 @@ export default function CompanyManagement() {
                 className="col-span-3"
                 required
               />
+            </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="category" className="text-right">
+                Kategori
+              </Label>
+              <div className="col-span-3 space-y-2">
+                <Select                  value={formData.category}
+                  onValueChange={(value) => {
+                    if (value === "add-new") {
+                      setShowNewCategoryInput(true);
+                    } else if (value === "manage") {
+                      setShowCategoryManager(true);
+                    } else {
+                      setFormData({ ...formData, category: value });
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Firma kategorisi seçin" />
+                  </SelectTrigger>                  <SelectContent>
+                    {categories.map((category) => (
+                      <SelectItem key={category} value={category}>
+                        {category}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="add-new" className="text-blue-600 font-medium">
+                      + Yeni Kategori Ekle
+                    </SelectItem>
+                    <SelectItem value="manage" className="text-orange-600 font-medium">
+                      🗂️ Kategorileri Yönet
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                
+                {showNewCategoryInput && (
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Yeni kategori adı"
+                      value={newCategory}
+                      onChange={(e) => setNewCategory(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          addNewCategory();
+                        } else if (e.key === 'Escape') {
+                          setShowNewCategoryInput(false);
+                          setNewCategory("");
+                        }
+                      }}
+                      autoFocus
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={addNewCategory}
+                      disabled={!newCategory.trim()}
+                    >
+                      Ekle
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setShowNewCategoryInput(false);
+                        setNewCategory("");
+                      }}
+                    >
+                      İptal
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
             
             <div className="grid grid-cols-4 items-center gap-4">
@@ -560,12 +781,13 @@ export default function CompanyManagement() {
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="phone" className="text-right">
                 Telefon
-              </Label>
-              <Input
+              </Label>              <Input
                 id="phone"
                 name="phone"
                 value={formData.phone}
                 onChange={handleInputChange}
+                onKeyPress={handlePhoneKeyPress}
+                placeholder="+90 532 456 12 45"
                 className="col-span-3"
               />
             </div>
@@ -632,6 +854,46 @@ export default function CompanyManagement() {
             <Button type="button" onClick={handleSaveCompany}>
               {formMode === 'add' ? 'Ekle' : 'Güncelle'}
             </Button>
+          </DialogFooter>        </DialogContent>
+      </Dialog>
+
+      {/* Kategori Yönetim Dialog'u */}
+      <Dialog open={showCategoryManager} onOpenChange={setShowCategoryManager}>
+        <DialogContent className="sm:max-w-[525px]">
+          <DialogHeader>
+            <DialogTitle>Kategori Yönetimi</DialogTitle>
+            <DialogDescription>
+              Firma kategorilerini buradan yönetebilirsiniz.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-96 overflow-y-auto space-y-2">
+            {categories.map((category, index) => (
+              <div key={category} className="flex items-center justify-between p-3 border rounded-lg">
+                <span className="font-medium">{category}</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    if (window.confirm(`"${category}" kategorisini silmek istediğinizden emin misiniz?`)) {
+                      deleteCategory(category);
+                    }
+                  }}
+                  className="text-red-500 hover:text-red-700"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+            {categories.length === 0 && (
+              <div className="text-center py-8 text-gray-500">
+                Henüz kategori bulunmamaktadır.
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Kapat</Button>
+            </DialogClose>
           </DialogFooter>
         </DialogContent>
       </Dialog>
