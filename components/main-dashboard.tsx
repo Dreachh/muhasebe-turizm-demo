@@ -989,7 +989,34 @@ export function MainDashboard({ onNavigate, financialData = [], toursData = [], 
             </div>
           </div>
         </CardHeader>        <CardContent className="pt-0 pb-4">
-          <div className="overflow-x-auto">            <Table className="border-collapse table-auto w-full"><colgroup><col style={{width: '60px'}}/><col style={{width: '65px'}}/><col style={{width: '220px'}}/><col style={{width: '100px'}}/><col style={{width: '110px'}}/><col style={{width: '140px'}}/><col style={{width: '160px'}}/><col style={{width: '50px'}}/></colgroup><TableHeader><TableRow className="border-b-2 border-black bg-gray-100"><TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '60px'}}>Seri</TableHead><TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '65px'}}>Tarih</TableHead><TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '220px'}}>Tur Şablonu</TableHead><TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '100px'}}>Müşteri</TableHead><TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '110px'}}>İletişim</TableHead><TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '140px'}}>Alış Yeri</TableHead><TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '160px'}}>Firma</TableHead><TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '50px'}}>Kişi</TableHead><TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '110px'}}>Ödeme</TableHead><TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '80px'}}>Tutar</TableHead><TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '100px'}}>Alış</TableHead></TableRow></TableHeader><TableBody>
+          <div className="overflow-x-auto">
+            <Table className="border-collapse table-auto w-full">
+              <colgroup>
+                <col style={{width: '60px'}}/>
+                <col style={{width: '65px'}}/>
+                <col style={{width: '220px'}}/>
+                <col style={{width: '100px'}}/>
+                <col style={{width: '110px'}}/>
+                <col style={{width: '140px'}}/>
+                <col style={{width: '160px'}}/>
+                <col style={{width: '50px'}}/>
+              </colgroup>
+              <TableHeader>
+                <TableRow className="border-b-2 border-black bg-gray-100">
+                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '60px'}}>Seri</TableHead>
+                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '65px'}}>Tarih</TableHead>
+                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '220px'}}>Tur Şablonu</TableHead>
+                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '100px'}}>Müşteri</TableHead>
+                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '110px'}}>İletişim</TableHead>
+                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '140px'}}>Alış Yeri</TableHead>
+                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '160px'}}>Firma</TableHead>
+                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '50px'}}>Kişi</TableHead>
+                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '110px'}}>Ödeme</TableHead>
+                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '80px'}}>Tutar</TableHead>
+                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '100px'}}>Alış</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {(() => {
                   // Rezervasyonları tarih filtresine göre filtrele
                   let filteredReservations = [...reservationsData];
@@ -1140,7 +1167,8 @@ export function MainDashboard({ onNavigate, financialData = [], toursData = [], 
                           </TableCell>
                           <TableCell className="font-medium border-r border-gray-200 text-right align-top py-2 px-2" style={{width: '80px'}}>
                             <div className="text-sm font-medium leading-tight">{formatCurrencyLocal(reservation.tutar, reservation.paraBirimi)}</div>
-                          </TableCell>                          <TableCell className="border-r border-gray-200 text-center align-top py-2 px-2" style={{width: '100px'}}>
+                          </TableCell>
+                          <TableCell className="border-r border-gray-200 text-center align-top py-2 px-2" style={{width: '100px'}}>
                             <div className="text-sm space-y-1">
                               {reservation.alisDetaylari && reservation.alisDetaylari["Alış Saati"] && (
                                 <div className="flex items-center justify-center gap-1 text-xs text-gray-500">
@@ -1175,7 +1203,8 @@ export function MainDashboard({ onNavigate, financialData = [], toursData = [], 
                               ) : (
                                 <div className="text-xs text-gray-500 leading-tight">-</div>
                               )}
-                            </div>                          </TableCell>
+                            </div>
+                          </TableCell>
                         </TableRow>
                       );
 
@@ -1229,7 +1258,8 @@ export function MainDashboard({ onNavigate, financialData = [], toursData = [], 
                                     <span className="text-sm text-gray-400">Özel İstekler: -</span>
                                   )}
                                 </div>
-                              </div>                            </TableCell>
+                              </div>
+                            </TableCell>
                           </TableRow>
                         );
                       } else {

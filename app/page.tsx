@@ -171,12 +171,13 @@ interface CustomerData {
   deleted?: boolean;
 }
 
-export default function Home() {
-  const [currentView, setCurrentView] = useState<string>("splash")
+export default function Home() {  const [currentView, setCurrentView] = useState<string>("splash")
   const [financialData, setFinancialData] = useState<FinancialData[]>([])
   const [toursData, setToursData] = useState<TourData[]>([])
   const [customersData, setCustomersData] = useState<CustomerData[]>([])
   const [reservationsData, setReservationsData] = useState<Rezervasyon[]>([]) // Rezervasyon verileri için yeni state
+  const [destinationsData, setDestinationsData] = useState<any[]>([]) // Destinasyon verileri
+  const [tourTemplatesData, setTourTemplatesData] = useState<any[]>([]) // Şablon verileri
   const [editingRecord, setEditingRecord] = useState<any>(null)
   const [editingReservation, setEditingReservation] = useState<Rezervasyon | null>(null) // Rezervasyon düzenleme
   const [isLoading, setIsLoading] = useState<boolean>(true)
@@ -189,28 +190,38 @@ export default function Home() {
   // Add state to store temporary form data
   const [tempTourFormData, setTempTourFormData] = useState<any>(null)
   const [previousView, setPreviousView] = useState<string | null>(null)
-
   const loadReservations = async () => {
     setIsLoading(true);
     try {
-      console.log("Firebase'den rezervasyonlar yükleniyor...");
-      let data = await getReservations();
-
-      // Firebase'den rezervasyon verilerini alıyoruz - test verisi eklenmeyecek
+      console.log("Firebase'den veriler yükleniyor...");
       
-      setReservationsData(data);
-      console.log("✅ Rezervasyonlar başarıyla yüklendi:", data);
+      // Rezervasyon, destinasyon ve şablon verilerini paralel yükle
+      const [reservations, destinations, templates] = await Promise.all([
+        getReservations(),
+        getAllData('destinations'),
+        getAllData('tourTemplates')
+      ]);
+
+      setReservationsData(reservations);
+      setDestinationsData(destinations);
+      setTourTemplatesData(templates);
+      
+      console.log("✅ Tüm veriler yüklendi:", {
+        reservations: reservations.length,
+        destinations: destinations.length,
+        templates: templates.length
+      });
     } catch (error) {
-      console.error("Rezervasyonlar yüklenirken hata oluştu:", error);
+      console.error("Veriler yüklenirken hata oluştu:", error);
       toast({
         title: "Hata",
-        description: "Rezervasyonlar yüklenirken bir hata oluştu.",
+        description: "Veriler yüklenirken bir hata oluştu.",
         variant: "destructive",
       });
     } finally {
       setIsLoading(false);
     }
-  };  // Yedekleme ve geri yükleme işlemleri için fonksiyonlar
+  };// Yedekleme ve geri yükleme işlemleri için fonksiyonlar
   const handleExportData = async () => {
     try {
       await exportData();
@@ -306,9 +317,13 @@ export default function Home() {
       setCurrentView("rezervasyon-form");
       setEditingRecord(data); // Düzenleme verisini ayarla
       return;
+    }    if (view === "rezervasyon-liste") {
+      setCurrentView("rezervasyon-liste");
+      return;
     }
 
-    if (view === "rezervasyon-liste") {
+    // rezervasyon-management alias'ı rezervasyon-liste'ye yönlendir (takvimden gelirken)
+    if (view === "rezervasyon-management") {
       setCurrentView("rezervasyon-liste");
       return;
     }
@@ -673,8 +688,7 @@ export default function Home() {
               }}
               onClose={() => navigateTo("main-dashboard")}
             />
-          )}
-          {currentView === "calendar" && (
+          )}          {currentView === "calendar" && (
             <CalendarView
               toursData={toursData.map(tour => {
                 // Güvenli tip dönüşümü için
@@ -687,9 +701,10 @@ export default function Home() {
                   date: new Date(tour.tourDate),
                   title: `#${tour.serialNumber || '----'} | ${tour.customerName || 'İsimsiz'} (${tour.numberOfPeople || 0} Kişi)`,
                   customers: `${tour.numberOfPeople || 0} Kişi`,
-                  color: '#4f46e5',
+                  color: '#10b981', // Emerald-500 yeşil - tur satışları
                   location: tour.tourName || 'Belirtilmemiş',
                   time: new Date(tour.tourDate).getHours() + ':00',
+                  type: 'tour', // Tip eklendi
                   tourName: tour.tourName,
                   customerName: tour.customerName,
                   totalPrice: totalPriceValue,
@@ -697,6 +712,37 @@ export default function Home() {
                   serialNumber: tour.serialNumber
                 };
               })}
+              reservationsData={reservationsData.map(reservation => {                // Rezervasyon verilerini CalendarEvent formatına dönüştür
+                const reservationDate = new Date(reservation.turTarihi);
+                
+                // Destinasyon isimlerini çözümle
+                const getDestinationName = (destinationId: string) => {
+                  const destination = destinationsData.find(d => d.id === destinationId);
+                  return destination ? (destination.name || destination.title || destinationId) : destinationId;
+                };
+                
+                return {
+                  id: reservation.id,
+                  date: reservationDate,
+                  title: `${reservation.seriNumarasi || 'REZ-????'} | ${reservation.musteriAdiSoyadi || 'İsimsiz'}`,
+                  customers: reservation.musteriAdiSoyadi || 'İsimsiz',
+                  color: '#3b82f6', // Blue-500 mavi - rezervasyonlar
+                  location: getDestinationName(reservation.destinasyon || ''),
+                  time: reservation.alisSaati || '09:00',
+                  type: 'reservation', // Tip eklendi
+                  tourName: reservation.turSablonu,
+                  customerName: reservation.musteriAdiSoyadi,
+                  totalPrice: parseFloat(reservation.tutar?.toString() || '0'),
+                  currency: reservation.paraBirimi || 'TRY',
+                  serialNumber: reservation.seriNumarasi,
+                  // Rezervasyon özel alanları
+                  reservationId: reservation.id,
+                  status: reservation.odemeDurumu,
+                  destination: reservation.destinasyon,
+                  agency: reservation.firma
+                };              })}
+              destinations={destinationsData}
+              tourTemplates={tourTemplatesData}
               onNavigate={navigateTo}
             />
           )}
@@ -765,10 +811,11 @@ export default function Home() {
               onCancel={() => navigateTo('rezervasyon-liste')}
               onEditComplete={handleReservationEditComplete}
             />
-          )}
-            {currentView === "rezervasyon-liste" && (
+          )}            {currentView === "rezervasyon-liste" && (
             <RezervasyonListe 
               reservationsData={reservationsData}
+              destinations={destinationsData}
+              tourTemplates={tourTemplatesData}
               isLoading={isLoading}
               onAddNew={() => setCurrentView("rezervasyon-form")}
               onEdit={(reservation) => {

@@ -1165,3 +1165,153 @@ export async function updateReservation(id: string, reservation: any): Promise<b
     return false;
   }
 }
+
+// ==================== REZERVASYON SIRALAMA FONKSİYONLARI ====================
+
+// Rezervasyonları yaklaşan tarihe göre destinasyon gruplarında sırala
+export function sortReservationsByUrgency(reservations: any[], destinations?: any[]): { [key: string]: any[] } {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const threeDaysLater = new Date(today);
+  threeDaysLater.setDate(today.getDate() + 3);
+
+  // Destinasyon ID'sini isme çeviren helper fonksiyon
+  const getDestinationName = (destinationId: string) => {
+    if (!destinations || destinations.length === 0) return destinationId;
+    const destination = destinations.find(d => d.id === destinationId);
+    return destination ? (destination.name || destination.title || destinationId) : destinationId;
+  };
+
+  // Önce her rezervasyonun aciliyet durumunu hesapla
+  const reservationsWithUrgency = reservations.map(reservation => {
+    const reservationDate = new Date(reservation.turTarihi);
+    reservationDate.setHours(0, 0, 0, 0);
+    
+    const daysDiff = Math.ceil((reservationDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    
+    // Aciliyet skorlama: negatif değerler geçmiş, 0-3 arası yaklaşan
+    let urgencyScore = daysDiff;
+    if (daysDiff <= 0) urgencyScore = 1000; // Geçmiş tarihler en alta
+    else if (daysDiff <= 3) urgencyScore = daysDiff; // 1-3 gün arası en üstte
+    else urgencyScore = daysDiff + 100; // Diğerleri normal sırada
+    
+    return {
+      ...reservation,
+      urgencyScore,
+      daysDiff,
+      isUrgent: daysDiff >= 0 && daysDiff <= 3
+    };
+  });
+  // Destinasyona göre grupla (isim kullanarak)
+  const groupedByDestination = reservationsWithUrgency.reduce((groups, reservation) => {
+    const destinationName = getDestinationName(reservation.destinasyon) || "Diğer";
+    if (!groups[destinationName]) {
+      groups[destinationName] = [];
+    }
+    groups[destinationName].push(reservation);
+    return groups;
+  }, {} as Record<string, any[]>);
+  // Her grup için minimum aciliyet skorunu hesapla
+  const destinationUrgency = Object.keys(groupedByDestination).map(destination => {
+    const group = groupedByDestination[destination];
+    const minUrgencyScore = Math.min(...group.map((r: any) => r.urgencyScore));
+    const hasUrgentReservations = group.some((r: any) => r.isUrgent);
+    const urgentCount = group.filter((r: any) => r.isUrgent).length;
+    
+    return {
+      destination,
+      minUrgencyScore,
+      hasUrgentReservations,
+      urgentCount,
+      reservations: group
+    };
+  });
+
+  // Destinasyonları aciliyet durumuna göre sırala
+  destinationUrgency.sort((a, b) => {
+    // Önce yaklaşan tarihi olan destinasyonlar
+    if (a.hasUrgentReservations && !b.hasUrgentReservations) return -1;
+    if (!a.hasUrgentReservations && b.hasUrgentReservations) return 1;
+    
+    // Her ikisinde de yaklaşan tarih varsa, en yakın tarihe göre sırala
+    if (a.hasUrgentReservations && b.hasUrgentReservations) {
+      return a.minUrgencyScore - b.minUrgencyScore;
+    }
+    
+    // Hiçbirinde yaklaşan tarih yoksa, normal tarihe göre sırala
+    return a.minUrgencyScore - b.minUrgencyScore;
+  });
+  // Her grup içindeki rezervasyonları da tarihe göre sırala
+  const sortedGroups: { [key: string]: any[] } = {};
+  destinationUrgency.forEach(({ destination, reservations }) => {
+    sortedGroups[destination] = reservations.sort((a: any, b: any) => {
+      // Önce aciliyet skoruna göre
+      if (a.urgencyScore !== b.urgencyScore) {
+        return a.urgencyScore - b.urgencyScore;
+      }
+      
+      // Sonra saate göre (aynı gün içinde)
+      const timeA = a.alisSaati || "00:00";
+      const timeB = b.alisSaati || "00:00";
+      return timeA.localeCompare(timeB);
+    });
+  });
+
+  return sortedGroups;
+}
+
+// Rezervasyonları tek liste halinde sırala (grup olmadan)
+export function sortReservationsFlat(reservations: any[]): any[] {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return reservations
+    .map(reservation => {
+      const reservationDate = new Date(reservation.turTarihi);
+      reservationDate.setHours(0, 0, 0, 0);
+      
+      const daysDiff = Math.ceil((reservationDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      
+      let urgencyScore = daysDiff;
+      if (daysDiff <= 0) urgencyScore = 1000; // Geçmiş tarihler en alta
+      else if (daysDiff <= 3) urgencyScore = daysDiff; // 1-3 gün arası en üstte
+      else urgencyScore = daysDiff + 100; // Diğerleri normal sırada
+      
+      return {
+        ...reservation,
+        urgencyScore,
+        daysDiff,
+        isUrgent: daysDiff >= 0 && daysDiff <= 3
+      };
+    })
+    .sort((a, b) => {
+      // Önce aciliyet skoruna göre
+      if (a.urgencyScore !== b.urgencyScore) {
+        return a.urgencyScore - b.urgencyScore;
+      }
+      
+      // Sonra saate göre (aynı gün içinde)
+      const timeA = a.alisSaati || "00:00";
+      const timeB = b.alisSaati || "00:00";
+      return timeA.localeCompare(timeB);
+    });
+}
+
+// Yaklaşan rezervasyonları filtrele (son 3 gün)
+export function getUpcomingReservations(reservations: any[]): any[] {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const threeDaysLater = new Date(today);
+  threeDaysLater.setDate(today.getDate() + 3);
+
+  return reservations.filter(reservation => {
+    const reservationDate = new Date(reservation.turTarihi);
+    reservationDate.setHours(0, 0, 0, 0);
+    
+    return reservationDate >= today && reservationDate < threeDaysLater;
+  });
+}
+
+// ==================== REZERVASYON SİSTEMİ FONKSİYONLARI ====================

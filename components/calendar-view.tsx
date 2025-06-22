@@ -31,7 +31,7 @@ const formatCurrency = (amount: number, currency: string) => {
   }).format(amount);
 }
 
-// Event (Tour) tipini tanımla (daha spesifik)
+// Event (Tour ve Rezervasyon) tipini tanımla
 interface CalendarEvent {
   id: string | number;
   date: Date;
@@ -40,22 +40,37 @@ interface CalendarEvent {
   color?: string;
   location?: string;
   time?: string;
+  type: 'tour' | 'reservation'; // Tip ayırt edici
   // Ek detaylar (tur verisinden)
   tourName?: string;
   customerName?: string;
   totalPrice?: number;
   currency?: string;
   serialNumber?: string;
+  // Rezervasyon özel alanları
+  reservationId?: string;
+  status?: string;
+  destination?: string;
+  agency?: string;
 }
 
 // Props tipi
 interface CalendarViewProps {
   onNavigate: (viewId: string, params?: any) => void; // Opsiyonel parametre eklendi
   // onViewTour kaldırıldı, detaylar modal içinde gösterilecek
-  toursData: CalendarEvent[]; // Gelen veri tipini belirle
+  toursData: CalendarEvent[]; // Tur verileri
+  reservationsData?: CalendarEvent[]; // Rezervasyon verileri (opsiyonel)
+  destinations?: any[]; // Destinasyon verileri
+  tourTemplates?: any[]; // Tur şablonu verileri
 }
 
-export function CalendarView({ onNavigate, toursData = [] }: CalendarViewProps) {
+export function CalendarView({ 
+  onNavigate, 
+  toursData = [], 
+  reservationsData = [], 
+  destinations = [], 
+  tourTemplates = [] 
+}: CalendarViewProps) {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [viewMode, setViewMode] = useState("month")
   const [manualDate, setManualDate] = useState("")
@@ -63,6 +78,19 @@ export function CalendarView({ onNavigate, toursData = [] }: CalendarViewProps) 
   // Modal state'leri
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null)
+
+  // Helper fonksiyonlar - ID'leri isimlere çevir
+  const getDestinationName = (destinationId: string) => {
+    if (!destinations || destinations.length === 0) return destinationId;
+    const destination = destinations.find(d => d.id === destinationId);
+    return destination ? (destination.name || destination.title || destinationId) : destinationId;
+  };
+
+  const getTourTemplateName = (templateId: string) => {
+    if (!tourTemplates || tourTemplates.length === 0) return templateId;
+    const template = tourTemplates.find(t => t.id === templateId);
+    return template ? (template.name || template.title || templateId) : templateId;
+  };
 
   const monthNames = [
     "Ocak",
@@ -161,11 +189,12 @@ export function CalendarView({ onNavigate, toursData = [] }: CalendarViewProps) 
 
     return weekDays
   }
-
   // Belirli bir gün için etkinlikleri getir
   const getEventsForDay = (date: Date): CalendarEvent[] => {
-    // toursData'yı Date objesine göre filtrele
-    return toursData.filter((event) => {
+    // Tur ve rezervasyon verilerini birleştir
+    const allEvents = [...toursData, ...reservationsData];
+    
+    return allEvents.filter((event) => {
       if (!event.date) return false;
       const eventDate = typeof event.date === 'string' ? new Date(event.date) : event.date;
       if (!(eventDate instanceof Date) || isNaN(eventDate.getTime())) return false;
@@ -181,14 +210,27 @@ export function CalendarView({ onNavigate, toursData = [] }: CalendarViewProps) 
   const handleEventClick = (event: CalendarEvent) => {
     setSelectedEvent(event)
     setIsModalOpen(true)
-  }
-
-  // Kayda gitme işleyicisi
+  }  // Kayda gitme işleyicisi
   const navigateToRecord = (event: CalendarEvent | null) => {
       if (!event) return
-      // Tur kaydına gitmek için onNavigate kullanılır (varsayılan view: data-view)
-      // Filtreleme veya ID ile gitme gibi parametreler eklenebilir
-      onNavigate('data-view', { filterType: 'tour', filterValue: event.id })
+      
+      console.log('Kayda git:', event.type, event.id);
+      
+      // Tip göre farklı view'lara yönlendirme
+      if (event.type === 'tour') {
+        // Tur kaydına git - data-view'da filtreleme
+        onNavigate('data-view', { 
+          highlightId: event.id,
+          searchTerm: event.serialNumber || event.id 
+        })
+      } else if (event.type === 'reservation') {
+        // Rezervasyon listesine git
+        onNavigate('rezervasyon-liste', { 
+          highlightId: event.reservationId || event.id,
+          searchTerm: event.serialNumber || event.id
+        })
+      }
+      
       setIsModalOpen(false)
   }
 
@@ -263,19 +305,37 @@ export function CalendarView({ onNavigate, toursData = [] }: CalendarViewProps) 
                   className={`font-medium ${day.isToday ? "text-blue-600 bg-blue-100 rounded-full w-7 h-7 flex items-center justify-center" : ""}`}
                 >
                   {day.day}
-                </div>
-                <div className="mt-1 space-y-1 max-h-[80px] overflow-y-auto">
-                  {day.events.map((event) => (
-                    <div
-                      key={event.id}
-                      className="text-xs p-1.5 rounded cursor-pointer flex items-center gap-1 text-white shadow hover:shadow-md transition-shadow"
-                      style={{ backgroundColor: event.color || "#10b981" }}
-                      onClick={() => handleEventClick(event)}
-                    >
-                      <span className="truncate font-medium">{event.title || event.tourName}</span>
-                      <span className="ml-auto whitespace-nowrap opacity-80">({event.customers ?? event.customerName})</span>
-                    </div>
-                  ))}
+                </div>                <div className="mt-1 space-y-1 max-h-[80px] overflow-y-auto">
+                  {day.events.map((event) => {
+                    // Tip göre renk belirleme
+                    const getEventColor = (event: CalendarEvent) => {
+                      if (event.color) return event.color; // Manuel renk varsa onu kullan
+                      
+                      if (event.type === 'reservation') {
+                        // Rezervasyonlar için mavi tonları
+                        return "#3b82f6"; // Blue-500
+                      } else {
+                        // Turlar için yeşil tonları (varsayılan)
+                        return "#10b981"; // Emerald-500
+                      }
+                    };
+                    
+                    return (
+                      <div
+                        key={event.id}
+                        className="text-xs p-1.5 rounded cursor-pointer flex items-center gap-1 text-white shadow hover:shadow-md transition-shadow"
+                        style={{ backgroundColor: getEventColor(event) }}
+                        onClick={() => handleEventClick(event)}
+                      >
+                        {/* Tip gösterici ikon */}
+                        <span className="text-xs opacity-90">
+                          {event.type === 'reservation' ? '📅' : '🏖️'}
+                        </span>
+                        <span className="truncate font-medium">{event.title || event.tourName}</span>
+                        <span className="ml-auto whitespace-nowrap opacity-80">({event.customers ?? event.customerName})</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )),
@@ -304,35 +364,44 @@ export function CalendarView({ onNavigate, toursData = [] }: CalendarViewProps) 
               <div className="text-xs opacity-70">{monthNames[date.getMonth()]}</div>
             </div>
           ))}
-        </div>
-
-        <div className="grid grid-cols-7">
+        </div>        <div className="grid grid-cols-7">
           {weekDays.map((day, dayIndex) => {
-            const dayEvents = getEventsForDay(day)
-
+            const dayEvents = getEventsForDay(day);
+            
             return (
               <div key={dayIndex} className="border-r last:border-r-0 p-2 min-h-[200px] space-y-1">
                 {dayEvents.length > 0 ? (
-                  dayEvents.map((event) => (
-                    <div
-                      key={event.id}
-                      className="text-xs p-2 rounded cursor-pointer text-white shadow-sm hover:shadow-md transition-shadow"
-                      style={{ backgroundColor: event.color || "#10b981" }}
-                      onClick={() => handleEventClick(event)}
-                    >
-                      <div className="font-medium truncate mb-1">{event.title || event.tourName}</div>
-                      <div className="flex items-center gap-1 text-xs opacity-90">
-                        {event.time && (
-                          <>
-                            <Clock className="h-3 w-3" />
-                            <span>{event.time}</span>
-                          </>
-                        )}
-                        <Users className="h-3 w-3 ml-auto" />
-                        <span>{event.customers}</span>
+                  dayEvents.map((event) => {
+                    // Tip göre renk belirleme
+                    const getEventColor = (event: CalendarEvent) => {
+                      if (event.color) return event.color;
+                      return event.type === 'reservation' ? "#3b82f6" : "#10b981";
+                    };
+                    
+                    return (
+                      <div
+                        key={event.id}
+                        className="text-xs p-2 rounded cursor-pointer text-white shadow-sm hover:shadow-md transition-shadow"
+                        style={{ backgroundColor: getEventColor(event) }}
+                        onClick={() => handleEventClick(event)}
+                      >
+                        <div className="flex items-center gap-1 mb-1">
+                          <span>{event.type === 'reservation' ? '📅' : '🏖️'}</span>
+                          <div className="font-medium truncate">{event.title || event.tourName}</div>
+                        </div>
+                        <div className="flex items-center gap-1 text-xs opacity-90">
+                          {event.time && (
+                            <>
+                              <Clock className="h-3 w-3" />
+                              <span>{event.time}</span>
+                            </>
+                          )}
+                          <Users className="h-3 w-3 ml-auto" />
+                          <span>{event.customers}</span>
+                        </div>
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 ) : (
                   <div className="text-xs text-gray-400 text-center mt-4">Etkinlik yok</div>
                 )}
@@ -356,45 +425,57 @@ export function CalendarView({ onNavigate, toursData = [] }: CalendarViewProps) 
             {fullDayNames[currentDate.getDay() === 0 ? 6 : currentDate.getDay() - 1]}, {currentDate.getDate()}{" "}
             {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
           </div>
-        </div>
-
-        {/* Eğer o gün için etkinlik varsa göster */}
+        </div>        {/* Eğer o gün için etkinlik varsa göster */}
         {dayEvents.length > 0 ? (
           <div className="p-4 space-y-3">
             <h3 className="font-medium text-gray-700 mb-3">Bu Günün Etkinlikleri ({dayEvents.length})</h3>
-            {dayEvents.map((event) => (
-              <div
-                key={event.id}
-                className="p-3 rounded-lg cursor-pointer text-white shadow hover:shadow-md transition-shadow"
-                style={{ backgroundColor: event.color || "#10b981" }}
-                onClick={() => handleEventClick(event)}
-              >
-                <div className="font-medium text-lg">{event.title || event.tourName}</div>
-                <div className="flex items-center gap-4 mt-2 text-sm opacity-90">
-                  {event.time && (
-                    <div className="flex items-center gap-1">
-                      <Clock className="h-4 w-4" />
-                      <span>{event.time}</span>
-                    </div>
-                  )}
-                  <div className="flex items-center gap-1">
-                    <Users className="h-4 w-4" />
-                    <span>{event.customers || event.customerName} kişi</span>
+            {dayEvents.map((event) => {
+              // Tip göre renk belirleme
+              const getEventColor = (event: CalendarEvent) => {
+                if (event.color) return event.color;
+                return event.type === 'reservation' ? "#3b82f6" : "#10b981";
+              };
+              
+              return (
+                <div
+                  key={event.id}
+                  className="p-3 rounded-lg cursor-pointer text-white shadow hover:shadow-md transition-shadow"
+                  style={{ backgroundColor: getEventColor(event) }}
+                  onClick={() => handleEventClick(event)}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-lg">{event.type === 'reservation' ? '📅' : '🏖️'}</span>
+                    <div className="font-medium text-lg">{event.title || event.tourName}</div>
+                    <span className="ml-auto text-xs bg-white bg-opacity-20 px-2 py-1 rounded">
+                      {event.type === 'reservation' ? 'Rezervasyon' : 'Tur Satışı'}
+                    </span>
                   </div>
-                  {event.location && (
+                  <div className="flex items-center gap-4 mt-2 text-sm opacity-90">
+                    {event.time && (
+                      <div className="flex items-center gap-1">
+                        <Clock className="h-4 w-4" />
+                        <span>{event.time}</span>
+                      </div>
+                    )}
                     <div className="flex items-center gap-1">
-                      <MapPin className="h-4 w-4" />
-                      <span>{event.location}</span>
+                      <Users className="h-4 w-4" />
+                      <span>{event.customers || event.customerName} {event.type === 'reservation' ? '' : 'kişi'}</span>
+                    </div>
+                    {event.location && (
+                      <div className="flex items-center gap-1">
+                        <MapPin className="h-4 w-4" />
+                        <span>{event.location}</span>
+                      </div>
+                    )}
+                  </div>
+                  {event.totalPrice !== undefined && event.currency && (
+                    <div className="mt-2 text-sm opacity-90">
+                      <span className="font-medium">{formatCurrency(event.totalPrice, event.currency)}</span>
                     </div>
                   )}
                 </div>
-                {event.totalPrice !== undefined && event.currency && (
-                  <div className="mt-2 text-sm opacity-90">
-                    <span className="font-medium">{formatCurrency(event.totalPrice, event.currency)}</span>
-                  </div>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <div className="p-8 text-center text-gray-500">
@@ -463,8 +544,29 @@ export function CalendarView({ onNavigate, toursData = [] }: CalendarViewProps) 
             <Button variant="outline" onClick={() => onNavigate("dashboard")}>
               Kapat
             </Button>
+          </div>        </CardHeader>
+        
+        {/* Legend - Etkinlik Türü Açıklaması */}
+        <div className="px-6 pb-4">
+          <div className="flex items-center gap-6 text-sm">
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded" style={{ backgroundColor: '#10b981' }}></div>
+              <span className="flex items-center gap-1">
+                🏖️ Tur Satışları
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded" style={{ backgroundColor: '#3b82f6' }}></div>
+              <span className="flex items-center gap-1">
+                📅 Rezervasyonlar
+              </span>
+            </div>
+            <div className="text-xs text-gray-500 ml-auto">
+              Etkinliklere tıklayarak detaylara ulaşabilirsiniz
+            </div>
           </div>
-        </CardHeader>
+        </div>
+        
         <CardContent>
           {viewMode === "month" && renderMonthView()}
           {viewMode === "week" && renderWeekView()}
@@ -481,17 +583,19 @@ export function CalendarView({ onNavigate, toursData = [] }: CalendarViewProps) 
                     {new Date(selectedEvent.date).toLocaleDateString('tr-TR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                 </DialogDescription>
             )}
-          </DialogHeader>
-          {selectedEvent && (
+          </DialogHeader>          {selectedEvent && (
             <div className="grid gap-4 py-4">
                 <div className="flex items-center gap-2">
-                    <CalendarIcon className="h-5 w-5 text-gray-500" />
+                    <span className="text-lg">{selectedEvent.type === 'reservation' ? '📅' : '🏖️'}</span>
                     <span className="font-medium">{selectedEvent.title || selectedEvent.tourName}</span>
+                    <span className="ml-auto text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
+                      {selectedEvent.type === 'reservation' ? 'Rezervasyon' : 'Tur Satışı'}
+                    </span>
                 </div>
                 {selectedEvent.customerName && (
                     <div className="flex items-center gap-2">
                         <Users className="h-5 w-5 text-gray-500" />
-                        <span>{selectedEvent.customerName} ({selectedEvent.customers} kişi)</span>
+                        <span>{selectedEvent.customerName} ({selectedEvent.customers} {selectedEvent.type === 'reservation' ? '' : 'kişi'})</span>
                     </div>
                 )}
                 {selectedEvent.time && (
@@ -504,6 +608,23 @@ export function CalendarView({ onNavigate, toursData = [] }: CalendarViewProps) 
                     <div className="flex items-center gap-2">
                         <MapPin className="h-5 w-5 text-gray-500" />
                         <span>{selectedEvent.location}</span>
+                    </div>                )}                {/* Rezervasyon özel alanları */}
+                {selectedEvent.type === 'reservation' && selectedEvent.tourName && (
+                    <div className="flex items-center gap-2">
+                        <span className="h-5 w-5 text-center">🎯</span>
+                        <span>Tur Şablonu: {getTourTemplateName(selectedEvent.tourName)}</span>
+                    </div>
+                )}
+                {selectedEvent.type === 'reservation' && selectedEvent.agency && (
+                    <div className="flex items-center gap-2">
+                        <span className="h-5 w-5 text-center">🏢</span>
+                        <span>Acentası: {selectedEvent.agency}</span>
+                    </div>
+                )}
+                {selectedEvent.type === 'reservation' && selectedEvent.status && (
+                    <div className="flex items-center gap-2">
+                        <span className="h-5 w-5 text-center">💳</span>
+                        <span>Ödeme Durumu: {selectedEvent.status}</span>
                     </div>
                 )}
                 {selectedEvent.totalPrice !== undefined && selectedEvent.currency && (

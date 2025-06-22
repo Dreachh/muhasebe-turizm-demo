@@ -33,11 +33,13 @@ import { RezervasyonDetay } from "./rezervasyon-detay"
 import { DateRange } from "react-day-picker"
 import { useToast } from "@/components/ui/use-toast"
 import { deleteReservation } from "@/lib/db"
-import { getDestinations, getTourTemplates } from "@/lib/db-firebase"
+import { getDestinations, getTourTemplates, sortReservationsByUrgency } from "@/lib/db-firebase"
 import { Rezervasyon } from "@/types/rezervasyon-types"
 
 interface RezervasyonListeProps {
   reservationsData: Rezervasyon[];
+  destinations?: any[];
+  tourTemplates?: any[];
   isLoading: boolean;
   onAddNew: () => void;
   onEdit: (reservation: Rezervasyon) => void;
@@ -45,7 +47,15 @@ interface RezervasyonListeProps {
 }
 
 // The component now receives data and loading status as props
-export function RezervasyonListe({ reservationsData, isLoading, onAddNew, onEdit, onRefresh }: RezervasyonListeProps) {
+export function RezervasyonListe({ 
+  reservationsData, 
+  destinations: propDestinations,
+  tourTemplates: propTourTemplates,
+  isLoading, 
+  onAddNew, 
+  onEdit, 
+  onRefresh 
+}: RezervasyonListeProps) {
   const { toast } = useToast()
   
   const getStatusBadge = (status: string) => {
@@ -68,18 +78,22 @@ export function RezervasyonListe({ reservationsData, isLoading, onAddNew, onEdit
   const [selectedReservation, setSelectedReservation] = useState<any>(null);
   const [selectedAgency, setSelectedAgency] = useState("Tümü");
   const [selectedPaymentStatus, setSelectedPaymentStatus] = useState("Tümü");
-
-  // Data for resolving IDs to names
-  const [destinations, setDestinations] = useState<any[]>([]);
-  const [tourTemplates, setTourTemplates] = useState<any[]>([]);
+  // Data for resolving IDs to names - use props if available
+  const [destinations, setDestinations] = useState<any[]>(propDestinations || []);
+  const [tourTemplates, setTourTemplates] = useState<any[]>(propTourTemplates || []);
 
   // Dynamic filter data
   const [ornekDestinasyonlar, setOrnekDestinasyonlar] = useState<string[]>(["Tümü"]);
   const [ornekAcentalar, setOrnekAcentalar] = useState<string[]>(["Tümü"]);
   const odemeDurumlari = ["Tümü", "Ödendi", "Bekliyor", "Kısmi Ödendi", "İptal"];
-
-  // Load destinations and tour templates for ID resolution
+  // Load destinations and tour templates for ID resolution if not provided as props
   useEffect(() => {
+    if (propDestinations && propTourTemplates) {
+      setDestinations(propDestinations);
+      setTourTemplates(propTourTemplates);
+      return;
+    }
+
     const loadData = async () => {
       try {
         const [destinationsData, templatesData] = await Promise.all([
@@ -93,7 +107,7 @@ export function RezervasyonListe({ reservationsData, isLoading, onAddNew, onEdit
       }
     };
     loadData();
-  }, []);
+  }, [propDestinations, propTourTemplates]);
   // Update dynamic filters when data changes
   useEffect(() => {
     if (reservationsData && destinations.length > 0) {
@@ -225,21 +239,15 @@ export function RezervasyonListe({ reservationsData, isLoading, onAddNew, onEdit
       }
 
       return matchesSearch && matchesDestination && matchesAgency && matchesPayment && matchesDate
-    })
-  }, [reservationsData, searchTerm, filter, selectedAgency, selectedPaymentStatus, dateRange])
-  const groupReservationsByDestination = (reservations: any[]) => {
-    return reservations.reduce((groups, reservation) => {
-      const destination = getDestinationName(reservation.destinasyon) || "Diğer"
-      if (!groups[destination]) {
-        groups[destination] = []
-      }
-      groups[destination].push(reservation)
-      return groups
-    }, {} as Record<string, any[]>)
-  }
+    })  }, [reservationsData, searchTerm, filter, selectedAgency, selectedPaymentStatus, dateRange])
+    // Yeni sıralama mantığı - yaklaşan tarihe göre destinasyon grupları
   useEffect(() => {
-    const grouped = groupReservationsByDestination(filteredReservations)
-    setGroupedReservations(grouped)
+    if (filteredReservations.length > 0) {
+      const sortedGroups = sortReservationsByUrgency(filteredReservations, destinations)
+      setGroupedReservations(sortedGroups)
+    } else {
+      setGroupedReservations({})
+    }
   }, [filteredReservations, destinations])
   const handlePrint = () => {
     const now = new Date();
@@ -843,28 +851,53 @@ export function RezervasyonListe({ reservationsData, isLoading, onAddNew, onEdit
             <h3 className="text-lg font-medium text-gray-900 mb-2">Rezervasyon Bulunamadı</h3>
             <p className="text-gray-600">Seçilen kriterlere uygun rezervasyon bulunmuyor.</p>
           </CardContent>
-        </Card>
-      ) : (        Object.entries(groupedReservations)
-          .sort(([a], [b]) => a.localeCompare(b))
-          .map(([destination, reservations]) => (
-            <Card key={destination} className="mb-4 print:shadow-none print:border print:border-gray-400 print:break-inside-avoid">
-              <CardHeader className="bg-blue-50 print:bg-gray-100 print:border-b print:border-gray-400">
+        </Card>      ) : (        Object.entries(groupedReservations)
+          .map(([destination, reservations]) => {
+            // Yaklaşan rezervasyon sayısını hesapla
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const threeDaysLater = new Date(today);
+            threeDaysLater.setDate(today.getDate() + 3);
+            
+            const upcomingCount = reservations.filter((r: any) => {
+              const reservationDate = new Date(r.turTarihi);
+              reservationDate.setHours(0, 0, 0, 0);
+              return reservationDate >= today && reservationDate < threeDaysLater;
+            }).length;
+            
+            const hasUpcoming = upcomingCount > 0;
+            
+            return (
+            <Card key={destination} className={`mb-4 print:shadow-none print:border print:border-gray-400 print:break-inside-avoid ${hasUpcoming ? 'ring-2 ring-red-200 border-red-300' : ''}`}>
+              <CardHeader className={`${hasUpcoming ? 'bg-red-50' : 'bg-blue-50'} print:bg-gray-100 print:border-b print:border-gray-400`}>
                 <CardTitle className="flex items-center gap-2 text-lg print:text-base">
-                  <MapPin className="h-5 w-5 text-blue-600 print:text-gray-700" />
+                  <MapPin className={`h-5 w-5 ${hasUpcoming ? 'text-red-600' : 'text-blue-600'} print:text-gray-700`} />
                   {destination}
+                  {hasUpcoming && (
+                    <Badge variant="destructive" className="ml-2 animate-pulse">
+                      🔴 {upcomingCount} Yaklaşan
+                    </Badge>
+                  )}
                   <Badge variant="secondary" className="ml-auto print:bg-gray-200 print:text-gray-800">
                     {reservations.length} Rezervasyon
                   </Badge>
                 </CardTitle>
-              </CardHeader>              <CardContent className="p-0 relative print:overflow-visible">
-                <div className="overflow-x-auto print:overflow-visible">                  <Table className="border-collapse table-auto w-full print:text-xs"><colgroup><col style={{width: '60px'}}/><col style={{width: '65px'}}/><col style={{width: '220px'}}/><col style={{width: '100px'}}/><col style={{width: '110px'}}/>
+              </CardHeader><CardContent className="p-0 relative print:overflow-visible">                <div className="overflow-x-auto print:overflow-visible">
+                  <Table className="border-collapse table-auto w-full print:text-xs">
+                    <colgroup>
+                      <col style={{width: '60px'}}/>
+                      <col style={{width: '65px'}}/>
+                      <col style={{width: '220px'}}/>
+                      <col style={{width: '100px'}}/>
+                      <col style={{width: '110px'}}/>
                       <col style={{width: '140px'}} />
                       <col style={{width: '160px'}} />
                       <col style={{width: '50px'}} />
                       <col style={{width: '110px'}} />
                       <col style={{width: '80px'}} />
                       <col style={{width: '100px'}} />
-                    </colgroup>                    <TableHeader>
+                    </colgroup>
+                    <TableHeader>
                       <TableRow className="border-b-2 border-black bg-gray-100 print:border-b print:border-gray-600">
                         <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2 print:py-1 print:px-1 print:border-r-gray-400" style={{width: '60px'}}>Seri</TableHead>
                         <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2 print:py-1 print:px-1 print:border-r-gray-400" style={{width: '65px'}}>Tarih</TableHead>
@@ -892,7 +925,8 @@ export function RezervasyonListe({ reservationsData, isLoading, onAddNew, onEdit
                             return dateA - dateB;
                           }
                           return (a.alisSaati || "00:00").localeCompare(b.alisSaati || "00:00");
-                        });                      sortedReservations.forEach((reservation) => {
+                        });
+                      sortedReservations.forEach((reservation) => {
                         const today = new Date();
                         today.setHours(0, 0, 0, 0);
                         
@@ -922,9 +956,9 @@ export function RezervasyonListe({ reservationsData, isLoading, onAddNew, onEdit
                           printBgClass = "print:bg-gray-50 print:border-l-2 print:border-l-gray-500";
                         } else if (reservationDate >= dayAfterTomorrow && reservationDate < threeDaysLater) {
                           // Öbür gün (3 gün kalan) - Açık kırmızı
-                          rowBgClass = "bg-red-50 border-l-4 border-red-300";
-                          printBgClass = "print:bg-gray-25 print:border-l-2 print:border-l-gray-400";
-                        }                        rows.push(
+                          rowBgClass = "bg-red-50 border-l-4 border-red-300";                          printBgClass = "print:bg-gray-25 print:border-l-2 print:border-l-gray-400";
+                        }
+                        rows.push(
                           <TableRow
                             key={reservation.id}
                             className={`${rowBgClass} ${printBgClass} relative print:break-inside-avoid`}
@@ -989,7 +1023,7 @@ export function RezervasyonListe({ reservationsData, isLoading, onAddNew, onEdit
                                   {parseInt(reservation.cocukSayisi?.toString() || "0") > 0 && `+${parseInt(reservation.cocukSayisi?.toString() || "0")}Ç`}
                                 </span>
                               </div>
-                            </TableCell>                            <TableCell className="border-r border-gray-200 align-top py-2 px-2" style={{width: '110px'}}>
+                            </TableCell><TableCell className="border-r border-gray-200 align-top py-2 px-2" style={{width: '110px'}}>
                               <div className="space-y-1">
                                 {getStatusBadge(reservation.odemeDurumu)}
                                 <div className="text-xs text-gray-500 leading-tight">
@@ -1004,7 +1038,7 @@ export function RezervasyonListe({ reservationsData, isLoading, onAddNew, onEdit
                             </TableCell>
                             <TableCell className="font-medium border-r border-gray-200 text-right align-top py-2 px-2" style={{width: '80px'}}>
                               <div className="text-sm font-medium leading-tight">{formatCurrency(reservation.tutar, reservation.paraBirimi)}</div>
-                            </TableCell>                            <TableCell className="border-r border-gray-200 text-center align-top py-2 px-2" style={{width: '100px'}}>
+                            </TableCell><TableCell className="border-r border-gray-200 text-center align-top py-2 px-2 print:px-1" style={{width: '100px'}}>
                               <div className="text-sm space-y-1">
                                 {reservation.alisDetaylari && reservation.alisDetaylari["Alış Saati"] && (
                                   <div className="flex items-center justify-center gap-1 text-xs text-gray-500">
@@ -1057,7 +1091,8 @@ export function RezervasyonListe({ reservationsData, isLoading, onAddNew, onEdit
                                     )}
                                     Sil
                                   </DropdownMenuItem>
-                                </DropdownMenuContent>                              </DropdownMenu>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </TableCell>
                           </TableRow>
                         );
@@ -1133,13 +1168,16 @@ export function RezervasyonListe({ reservationsData, isLoading, onAddNew, onEdit
                 </div>
               </CardContent>
             </Card>
-          ))      )}
+          );
+        })
+      )}
       </div> {/* Print Content Container Sonu */}
 
       {/* Reservation Detail Modal */}
-      {selectedReservation && (
-        <RezervasyonDetay reservation={selectedReservation} onClose={() => setSelectedReservation(null)} />
-      )}      {/* Print Styles */}
+      {selectedReservation && (        <RezervasyonDetay reservation={selectedReservation} onClose={() => setSelectedReservation(null)} />
+      )}
+      
+      {/* Print Styles */}
       <style jsx global>{`
         @media print {
           @page {
