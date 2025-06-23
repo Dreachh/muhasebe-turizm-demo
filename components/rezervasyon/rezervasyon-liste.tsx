@@ -250,397 +250,30 @@ export function RezervasyonListe({
     }
   }, [filteredReservations, destinations])
   const handlePrint = () => {
-    const now = new Date();
-    const printDate = format(now, "dd.MM.yyyy", { locale: tr });
-    const printTime = format(now, "HH:mm", { locale: tr });
+    const printData = {
+      reservations: filteredReservations,
+      filters: {
+        dateRange: dateRange,
+        filter: filter,
+        selectedAgency: selectedAgency,
+        selectedPaymentStatus: selectedPaymentStatus,
+      },
+      destinations: destinations,
+      tourTemplates: tourTemplates,
+    };
 
-    // Filtrelenmiş rezervasyonları destinasyona göre grupla
-    const sorted = [...filteredReservations].sort((a, b) => {
-      const da = new Date(a.turTarihi).getTime();
-      const db = new Date(b.turTarihi).getTime();
-      if (da !== db) return da - db;
-      return (a.alisSaati || "00:00").localeCompare(b.alisSaati || "00:00");
-    });
-    
-    const groups: Record<string, any[]> = {};
-    sorted.forEach(res => {
-      const dest = getDestinationName(res.destinasyon);
-      if (!groups[dest]) groups[dest] = [];
-      groups[dest].push(res);
-    });
-
-    let html = `
-      <html>
-      <head>
-        <title>Rezervasyon Listesi - Nehir Travel</title>
-        <meta charset="utf-8">
-        <style>
-          * { 
-            margin: 0; 
-            padding: 0; 
-            box-sizing: border-box; 
-          }
-          
-          body { 
-            font-family: 'Arial', 'Helvetica', sans-serif; 
-            font-size: 10px;
-            line-height: 1.2;
-            margin: 10mm;
-            color: #000;
-            background: white;
-          }
-          
-          .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-            padding-bottom: 8px;
-            border-bottom: 3px solid #000;
-          }
-          
-          .header-left {
-            display: flex;
-            align-items: center;
-          }
-          
-          .logo {
-            height: 60px;
-            width: auto;
-            margin-right: 12px;
-          }
-          
-          .company-info h2 {
-            font-size: 16px;
-            font-weight: bold;
-            color: #000;
-            margin-bottom: 2px;
-          }
-          
-          .company-info p {
-            font-size: 11px;
-            color: #666;
-          }
-          
-          .header-right {
-            text-align: right;
-            font-size: 11px;
-            color: #000;
-          }
-          
-          .header-right .date {
-            font-weight: bold;
-            font-size: 12px;
-            margin-bottom: 2px;
-          }
-          
-          .header-right .time {
-            font-size: 10px;
-            color: #666;
-          }
-          
-          .main-title {
-            text-align: center;
-            font-size: 18px;
-            font-weight: bold;
-            margin: 12px 0;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            color: #000;
-          }
-          
-          .summary-info {
-            text-align: center;
-            font-size: 9px;
-            color: #666;
-            margin-bottom: 15px;
-          }
-          
-          .destination-section {
-            margin-bottom: 20px;
-            page-break-inside: avoid;
-          }
-          
-          .destination-title {
-            background: linear-gradient(to right, #f8f9fa, #e9ecef);
-            padding: 8px 15px;
-            font-size: 13px;
-            font-weight: bold;
-            border: 2px solid #000;
-            border-bottom: 1px solid #000;
-            margin-bottom: 0;
-            text-align: center;
-            color: #000;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-          }
-          
-          table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 15px;
-            font-size: 9px;
-            table-layout: fixed;
-          }
-          
-          th, td {
-            border: 1px solid #000;
-            padding: 3px 4px;
-            text-align: left;
-            vertical-align: top;
-            line-height: 1.2;
-            word-wrap: break-word;
-            overflow: hidden;
-          }
-          
-          th {
-            background: #f0f0f0;
-            font-weight: bold;
-            text-align: center;
-            font-size: 8px;
-            padding: 5px 3px;
-            text-transform: uppercase;
-            letter-spacing: 0.3px;
-          }
-          
-          tbody tr {
-            border-bottom: 1px solid #ccc;
-          }
-          
-          tbody tr:nth-child(even) {
-            background: #f9f9f9;
-          }
-          
-          /* Sütun genişlikleri */
-          .col-seri { width: 45px; }
-          .col-tarih { width: 50px; }
-          .col-tur { width: 160px; }
-          .col-musteri { width: 100px; }
-          .col-iletisim { width: 85px; }
-          .col-alis { width: 100px; }
-          .col-firma { width: 120px; }
-          .col-kisi { width: 35px; }
-          .col-odeme { width: 75px; }
-          .col-tutar { width: 60px; }
-          .col-saat { width: 70px; }
-          
-          .text-center { text-align: center !important; }
-          .text-right { text-align: right !important; }
-          .text-bold { font-weight: bold; }
-          .text-small { font-size: 7px; color: #666; }
-          .text-xs { font-size: 6px; color: #666; }
-          
-          .status-badge {
-            padding: 1px 4px;
-            border-radius: 2px;
-            font-size: 7px;
-            font-weight: bold;
-            text-align: center;
-            display: inline-block;
-            min-width: 40px;
-          }
-          
-          .status-odendi { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-          .status-bekliyor { background: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
-          .status-kismi { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
-          .status-iptal { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-          
-          .divider {
-            height: 1px;
-            background: #ddd;
-            margin: 1px 0;
-          }
-          
-          @media print {
-            body { 
-              margin: 0; 
-              font-size: 9px;
-            }
-            .destination-section { 
-              page-break-inside: avoid; 
-            }
-            table { 
-              page-break-inside: auto; 
-            }
-            tr { 
-              page-break-inside: avoid; 
-              page-break-after: auto; 
-            }
-            thead {
-              display: table-header-group;
-            }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <div class="header-left">
-            <img src="${window.location.origin}/logo.svg" alt="Nehir Travel Logo" class="logo" />
-            <div class="company-info">
-              <h2>NEHİR TRAVEL</h2>
-              <p>Turizm ve Seyahat Acentası</p>
-            </div>
-          </div>
-          <div class="header-right">
-            <div class="date">Tarih: ${printDate}</div>
-            <div class="time">Saat: ${printTime}</div>
-          </div>
-        </div>
-        
-        <h1 class="main-title">Rezervasyon Listesi</h1>
-        
-        <div class="summary-info">
-          Toplam ${sorted.length} rezervasyon • ${Object.keys(groups).length} destinasyon
-        </div>
-    `;
-
-    // Her destinasyon için tablo oluştur
-    Object.entries(groups)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .forEach(([dest, list]) => {
-        html += `
-        <div class="destination-section">
-          <div class="destination-title">${dest} - ${list.length} Rezervasyon</div>
-          <table>
-            <colgroup>
-              <col class="col-seri" />
-              <col class="col-tarih" />
-              <col class="col-tur" />
-              <col class="col-musteri" />
-              <col class="col-iletisim" />
-              <col class="col-alis" />
-              <col class="col-firma" />
-              <col class="col-kisi" />
-              <col class="col-odeme" />
-              <col class="col-tutar" />
-              <col class="col-saat" />
-            </colgroup>
-            <thead>
-              <tr>
-                <th class="col-seri">Seri No</th>
-                <th class="col-tarih">Tarih</th>
-                <th class="col-tur">Tur Şablonu</th>
-                <th class="col-musteri">Müşteri Adı</th>
-                <th class="col-iletisim">İletişim</th>
-                <th class="col-alis">Alış Yeri</th>
-                <th class="col-firma">Firma/Acenta</th>
-                <th class="col-kisi">Kişi</th>
-                <th class="col-odeme">Ödeme</th>
-                <th class="col-tutar">Tutar</th>
-                <th class="col-saat">Alış Saati</th>
-              </tr>
-            </thead>
-            <tbody>`;
-      
-        list.forEach((res, index) => {
-          const phone = formatPhoneNumber(res.telefon);
-          const customer = splitCustomerName(res.musteriAdiSoyadi);
-          const pickTime = res.alisDetaylari?.['Alış Saati'] || '-';
-          
-          let pickupInfo = '';
-          if (res.alisYeri === 'Acenta') {
-            pickupInfo = res.firma || 'Acenta';
-          } else if (res.alisYeri === 'Otel') {
-            if (res.alisDetaylari?.['Oda Numarası']) {
-              pickupInfo = `${res.alisDetaylari?.['Otel Adı'] || 'Otel'}<br><span class="text-xs">Oda: ${res.alisDetaylari['Oda Numarası']}</span>`;
-            } else {
-              pickupInfo = res.alisDetaylari?.['Otel Adı'] || 'Otel';
-            }
-          } else if (res.alisYeri === 'Özel Adres') {
-            const addr = res.alisDetaylari?.['Adres'];
-            pickupInfo = addr ? (addr.length > 20 ? addr.substring(0, 20) + '...' : addr) : 'Özel Adres';
-          } else {
-            pickupInfo = res.alisYeri || '-';
-          }
-          
-          let statusClass = 'status-bekliyor';
-          if (res.odemeDurumu === 'Ödendi') statusClass = 'status-odendi';
-          else if (res.odemeDurumu === 'Kısmi Ödendi') statusClass = 'status-kismi';
-          else if (res.odemeDurumu === 'İptal') statusClass = 'status-iptal';
-          
-          const totalPeople = parseInt(res.yetiskinSayisi?.toString() || '0') + parseInt(res.cocukSayisi?.toString() || '0');
-          
-          html += `
-            <tr>
-              <td class="col-seri text-center">
-                <div class="text-bold">${(res.seriNumarasi?.replace('RZV-', '') || (index + 1).toString().padStart(3, '0'))}</div>
-              </td>
-              <td class="col-tarih text-center">
-                <div class="text-bold">${format(new Date(res.turTarihi), 'dd.MM', { locale: tr })}</div>
-                <div class="text-xs">${format(new Date(res.turTarihi), 'yyyy', { locale: tr })}</div>
-              </td>
-              <td class="col-tur">
-                <div class="text-bold" style="margin-bottom: 2px;">${getTourTemplateName(res.turSablonu)}</div>
-                <div class="text-small">📍 ${getDestinationName(res.destinasyon)}</div>
-              </td>
-              <td class="col-musteri">
-                <div class="text-bold">${customer.line1}</div>
-                ${customer.line2 ? `<div class="text-bold">${customer.line2}</div>` : ''}
-                ${res.katilimcilar && res.katilimcilar.length > 0 ? 
-                  `<div class="text-xs">+${res.katilimcilar.length} katılımcı</div>` : ''}
-              </td>
-              <td class="col-iletisim text-center">
-                <div class="text-bold">${phone.line1}</div>
-                ${phone.line2 ? `<div class="text-small">${phone.line2}</div>` : ''}
-              </td>
-              <td class="col-alis">
-                <div class="text-bold text-small">${res.alisYeri}</div>
-                <div class="text-xs">${pickupInfo}</div>
-              </td>
-              <td class="col-firma">
-                <div class="text-bold text-small">${res.firma || '-'}</div>
-                ${res.yetkiliKisi ? `<div class="text-xs">${res.yetkiliKisi}</div>` : ''}
-              </td>
-              <td class="col-kisi text-center">
-                <div class="text-bold">${totalPeople}</div>
-                <div class="text-xs">(${res.yetiskinSayisi || 0}+${res.cocukSayisi || 0})</div>
-              </td>
-              <td class="col-odeme text-center">
-                <div class="status-badge ${statusClass}">${res.odemeDurumu}</div>
-                ${res.odemeYontemi ? `<div class="text-xs" style="margin-top: 1px;">${res.odemeYontemi}</div>` : ''}
-              </td>
-              <td class="col-tutar text-right">
-                <div class="text-bold">${formatCurrency(res.tutar, res.paraBirimi)}</div>
-              </td>
-              <td class="col-saat text-center">
-                <div class="text-bold">${pickTime}</div>
-                ${res.alisDetaylari?.['Özel Talimatlar'] ? 
-                  `<div class="text-xs">⚠️ Özel</div>` : ''}              </td>
-            </tr>`;
-            
-          // Her satırdan sonra ince çizgi ekle
-          if (index < list.length - 1) {
-            html += `<tr><td colspan="11" class="divider"></td></tr>`;
-          }
-        });
-      
-        html += `
-            </tbody>
-          </table>
-        </div>`;
+    try {
+      // Veriyi localStorage'a kaydet
+      localStorage.setItem('printData', JSON.stringify(printData));
+      // Yeni sekmede yazdırma sayfasını aç
+      window.open('/print/reservations', '_blank');
+    } catch (error) {
+      console.error("Yazdırma verileri localStorage'a kaydedilemedi", error);
+      toast({
+        title: "Yazdırma Hatası",
+        description: "Yazdırma verisi hazırlanamadı. Lütfen tekrar deneyin.",
+        variant: "destructive",
       });
-
-    html += `
-      </body>
-      </html>`;    // Yeni pencerede aç ve yazdır
-    if (typeof window !== 'undefined') {
-      let printWindow: Window | null;
-      printWindow = window.open('', '_blank', 'width=1200,height=800');
-      if (!printWindow) {
-        alert('Pop-up engelleyici nedeniyle yazdırma penceresi açılamadı. Lütfen pop-up engelleyiciyi devre dışı bırakın.');
-        return;
-      }
-
-      printWindow.document.write(html);
-      printWindow.document.close();
-
-      printWindow.onload = () => {
-        setTimeout(() => {
-          printWindow.focus();
-          printWindow.print();
-          printWindow.close();
-        }, 500);
-      };
     }
   }
 
@@ -883,33 +516,30 @@ export function RezervasyonListe({
                   </Badge>
                 </CardTitle>
               </CardHeader><CardContent className="p-0 relative print:overflow-visible">                <div className="overflow-x-auto print:overflow-visible">
-                  <Table className="border-collapse table-auto w-full print:text-xs">
-                    <colgroup>
+                  <Table className="border-collapse table-auto w-full print:text-xs">                    <colgroup>
                       <col style={{width: '60px'}}/>
                       <col style={{width: '65px'}}/>
+                      <col style={{width: '160px'}}/>
+                      <col style={{width: '110px'}}/>
                       <col style={{width: '220px'}}/>
                       <col style={{width: '100px'}}/>
                       <col style={{width: '110px'}}/>
-                      <col style={{width: '140px'}} />
-                      <col style={{width: '160px'}} />
                       <col style={{width: '50px'}} />
-                      <col style={{width: '110px'}} />
-                      <col style={{width: '80px'}} />
+                      <col style={{width: '140px'}} />
                       <col style={{width: '100px'}} />
                     </colgroup>
                     <TableHeader>
                       <TableRow className="border-b-2 border-black bg-gray-100 print:border-b print:border-gray-600">
-                        <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2 print:py-1 print:px-1 print:border-r-gray-400" style={{width: '60px'}}>Seri</TableHead>
-                        <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2 print:py-1 print:px-1 print:border-r-gray-400" style={{width: '65px'}}>Tarih</TableHead>
-                        <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2 print:py-1 print:px-1 print:border-r-gray-400" style={{width: '220px'}}>Tur Şablonu</TableHead>
-                        <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2 print:py-1 print:px-1 print:border-r-gray-400" style={{width: '100px'}}>Müşteri</TableHead>
-                        <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2 print:py-1 print:px-1 print:border-r-gray-400" style={{width: '110px'}}>İletişim</TableHead>
-                        <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2 print:py-1 print:px-1 print:border-r-gray-400" style={{width: '140px'}}>Alış Yeri</TableHead>
-                        <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2 print:py-1 print:px-1 print:border-r-gray-400" style={{width: '160px'}}>Firma</TableHead>
-                        <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2 print:py-1 print:px-1 print:border-r-gray-400" style={{width: '50px'}}>Kişi</TableHead>
-                        <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2 print:py-1 print:px-1 print:border-r-gray-400" style={{width: '110px'}}>Ödeme</TableHead>
-                        <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2 print:py-1 print:px-1 print:border-r-gray-400" style={{width: '80px'}}>Tutar</TableHead>
-                        <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2 print:py-1 print:px-1 print:border-r-gray-400" style={{width: '100px'}}>Alış</TableHead>
+                        <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2 print:py-1 print:px-1 print:border-r-gray-400" style={{width: '60px'}}>SERİ</TableHead>
+                        <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2 print:py-1 print:px-1 print:border-r-gray-400" style={{width: '65px'}}>TARİH</TableHead>
+                        <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2 print:py-1 print:px-1 print:border-r-gray-400" style={{width: '160px'}}>FİRMA</TableHead>
+                        <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2 print:py-1 print:px-1 print:border-r-gray-400" style={{width: '110px'}}>ÖDEME</TableHead>
+                        <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2 print:py-1 print:px-1 print:border-r-gray-400" style={{width: '220px'}}>TUR ŞABLONU</TableHead>
+                        <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2 print:py-1 print:px-1 print:border-r-gray-400" style={{width: '100px'}}>MÜŞTERİ</TableHead>
+                        <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2 print:py-1 print:px-1 print:border-r-gray-400" style={{width: '110px'}}>İLETİŞİM</TableHead>
+                        <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2 print:py-1 print:px-1 print:border-r-gray-400" style={{width: '50px'}}>KİŞİ SAYISI</TableHead>
+                        <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2 print:py-1 print:px-1 print:border-r-gray-400" style={{width: '140px'}}>ALIŞ YERİ</TableHead>
+                        <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2 print:py-1 print:px-1 print:border-r-gray-400" style={{width: '100px'}}>ALIŞ</TableHead>
                         <TableHead className="print:hidden text-center py-2 px-1" style={{width: '40px'}}><Settings className="h-4 w-4 mx-auto" /></TableHead>
                       </TableRow>
                     </TableHeader>
@@ -962,25 +592,40 @@ export function RezervasyonListe({
                           <TableRow
                             key={reservation.id}
                             className={`${rowBgClass} ${printBgClass} relative print:break-inside-avoid`}
-                          >
-                            <TableCell className="font-bold text-sm border-r border-gray-200 text-center align-top py-2 px-2 print:py-1 print:px-1 print:border-r-gray-400" style={{width: '60px'}}>
+                          >                            <TableCell className="font-bold text-sm border-r border-gray-200 text-center align-top py-2 px-2 print:py-1 print:px-1 print:border-r-gray-400" style={{width: '60px'}}>
                               <div className="text-xs text-gray-500 leading-tight print:text-2xs">RZV-</div>
                               <div className="text-sm font-bold leading-tight print:text-xs">{reservation.seriNumarasi?.replace('RZV-', '') || '0001'}</div>
                             </TableCell>
                             <TableCell className="font-medium border-r border-gray-200 text-center align-top py-2 px-2 print:py-1 print:px-1 print:border-r-gray-400" style={{width: '65px'}}>
                               <div className="font-bold text-sm leading-tight print:text-xs">{format(new Date(reservation.turTarihi), "dd", { locale: tr })}</div>
                               <div className="text-xs text-gray-500 leading-tight print:text-2xs">{format(new Date(reservation.turTarihi), "MMM", { locale: tr })}</div>
-                            </TableCell>
-                            <TableCell className="border-r border-gray-200 align-top py-2 px-2" style={{width: '220px'}}>
+                            </TableCell>                            <TableCell className="text-sm border-r border-gray-200 text-center align-top py-2 px-2" style={{width: '160px'}}>
+                              <div className="space-y-1">
+                                <div className="font-medium text-xs leading-tight">{reservation.firma}</div>
+                                <div className="text-xs text-gray-500 leading-tight">{reservation.yetkiliKisi}</div>
+                              </div>
+                            </TableCell><TableCell className="border-r border-gray-200 align-top py-2 px-2" style={{width: '110px'}}>
+                              <div className="space-y-1 text-center">
+                                {getStatusBadge(reservation.odemeDurumu)}
+                                <div className="text-xs text-gray-500 leading-tight">
+                                  {(reservation.odemeYapan || reservation.odemeYontemi) && (
+                                    <div>{reservation.odemeYapan || ''}{reservation.odemeYapan && reservation.odemeYontemi ? '/' : ''}{reservation.odemeYontemi || ''}</div>
+                                  )}
+                                  <div className="font-medium text-gray-800">
+                                    {formatCurrency(reservation.tutar, reservation.paraBirimi)}
+                                  </div>
+                                </div>
+                              </div>
+                            </TableCell>                            <TableCell className="border-r border-gray-200 text-center align-top py-2 px-2" style={{width: '220px'}}>
                               <div className="space-y-1">
                                 <div className="font-medium text-sm leading-tight">{getTourTemplateName(reservation.turSablonu)}</div>
-                                <div className="flex items-center gap-1 text-xs text-gray-500">
+                                <div className="flex items-center justify-center gap-1 text-xs text-gray-500">
                                   <MapPin className="h-3 w-3 flex-shrink-0" />
                                   <span className="leading-tight">{getDestinationName(reservation.destinasyon)}</span>
                                 </div>
                               </div>
                             </TableCell>
-                            <TableCell className="font-medium border-r border-gray-200 align-top py-2 px-2" style={{width: '100px'}}>
+                            <TableCell className="font-medium border-r border-gray-200 text-center align-top py-2 px-2" style={{width: '100px'}}>
                               <div className="space-y-1">
                                 <div className="text-sm font-medium leading-tight">{splitCustomerName(reservation.musteriAdiSoyadi).line1}</div>
                                 {splitCustomerName(reservation.musteriAdiSoyadi).line2 && (
@@ -999,7 +644,15 @@ export function RezervasyonListe({
                                 )}
                               </div>
                             </TableCell>
-                            <TableCell className="border-r border-gray-200 align-top py-2 px-2" style={{width: '140px'}}>
+                            <TableCell className="border-r border-gray-200 text-center align-top py-2 px-2" style={{width: '50px'}}>
+                              <div className="flex items-center justify-center gap-1 text-sm">
+                                <Users className="h-3 w-3 flex-shrink-0" />
+                                <span className="text-sm font-medium">
+                                  {parseInt(reservation.yetiskinSayisi?.toString() || "0")}
+                                  {parseInt(reservation.cocukSayisi?.toString() || "0") > 0 && `+${parseInt(reservation.cocukSayisi?.toString() || "0")}Ç`}
+                                </span>
+                              </div>
+                            </TableCell>                            <TableCell className="border-r border-gray-200 text-center align-top py-2 px-2" style={{width: '140px'}}>
                               <div className="space-y-1">
                                 <div className="font-medium text-sm leading-tight">{reservation.alisYeri}</div>
                                 <div className="text-xs text-gray-500 leading-tight">
@@ -1009,36 +662,7 @@ export function RezervasyonListe({
                                 </div>
                               </div>
                             </TableCell>
-                            <TableCell className="text-sm border-r border-gray-200 align-top py-2 px-2" style={{width: '160px'}}>
-                              <div className="space-y-1">
-                                <div className="font-medium text-xs leading-tight">{reservation.firma}</div>
-                                <div className="text-xs text-gray-500 leading-tight">{reservation.yetkiliKisi}</div>
-                              </div>
-                            </TableCell>
-                            <TableCell className="border-r border-gray-200 text-center align-top py-2 px-2" style={{width: '50px'}}>
-                              <div className="flex items-center justify-center gap-1 text-sm">
-                                <Users className="h-3 w-3 flex-shrink-0" />
-                                <span className="text-sm font-medium">
-                                  {parseInt(reservation.yetiskinSayisi?.toString() || "0")}
-                                  {parseInt(reservation.cocukSayisi?.toString() || "0") > 0 && `+${parseInt(reservation.cocukSayisi?.toString() || "0")}Ç`}
-                                </span>
-                              </div>
-                            </TableCell><TableCell className="border-r border-gray-200 align-top py-2 px-2" style={{width: '110px'}}>
-                              <div className="space-y-1">
-                                {getStatusBadge(reservation.odemeDurumu)}
-                                <div className="text-xs text-gray-500 leading-tight">
-                                  {reservation.odemeYapan && (
-                                    <div>{reservation.odemeYapan}</div>
-                                  )}
-                                  {reservation.odemeYontemi && (
-                                    <div>{reservation.odemeYontemi}</div>
-                                  )}
-                                </div>
-                              </div>
-                            </TableCell>
-                            <TableCell className="font-medium border-r border-gray-200 text-right align-top py-2 px-2" style={{width: '80px'}}>
-                              <div className="text-sm font-medium leading-tight">{formatCurrency(reservation.tutar, reservation.paraBirimi)}</div>
-                            </TableCell><TableCell className="border-r border-gray-200 text-center align-top py-2 px-2 print:px-1" style={{width: '100px'}}>
+                            <TableCell className="border-r border-gray-200 text-center align-top py-2 px-2 print:px-1" style={{width: '100px'}}>
                               <div className="text-sm space-y-1">
                                 {reservation.alisDetaylari && reservation.alisDetaylari["Alış Saati"] && (
                                   <div className="flex items-center justify-center gap-1 text-xs text-gray-500">

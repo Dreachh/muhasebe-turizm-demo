@@ -7,13 +7,13 @@ import { getSettings } from "@/lib/db"
 export default function PrintTourPage({ params }) {
   const [tourData, setTourData] = useState(null)
   const [companyInfo, setCompanyInfo] = useState({
-    name: "PassionisTravel",
+    name: "Nehir Travel",
     address: "",
     phone: "",
     email: "",
     website: "",
     logo: null,
-    footerText: "Bu belge PassionisTravel tarafından düzenlenmiştir."
+    footerText: "Bu belge Nehir Travel tarafından düzenlenmiştir."
   })
   const [isLoading, setIsLoading] = useState(true)
   const printAttempted = useRef(false)

@@ -990,30 +990,30 @@ export function MainDashboard({ onNavigate, financialData = [], toursData = [], 
           </div>
         </CardHeader>        <CardContent className="pt-0 pb-4">
           <div className="overflow-x-auto">
-            <Table className="border-collapse table-auto w-full">
-              <colgroup>
+            <Table className="border-collapse table-auto w-full">              <colgroup>
                 <col style={{width: '60px'}}/>
                 <col style={{width: '65px'}}/>
+                <col style={{width: '160px'}}/>
+                <col style={{width: '110px'}}/>
                 <col style={{width: '220px'}}/>
                 <col style={{width: '100px'}}/>
                 <col style={{width: '110px'}}/>
-                <col style={{width: '140px'}}/>
-                <col style={{width: '160px'}}/>
                 <col style={{width: '50px'}}/>
+                <col style={{width: '140px'}}/>
+                <col style={{width: '100px'}}/>
               </colgroup>
               <TableHeader>
                 <TableRow className="border-b-2 border-black bg-gray-100">
-                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '60px'}}>Seri</TableHead>
-                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '65px'}}>Tarih</TableHead>
-                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '220px'}}>Tur Şablonu</TableHead>
-                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '100px'}}>Müşteri</TableHead>
-                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '110px'}}>İletişim</TableHead>
-                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '140px'}}>Alış Yeri</TableHead>
-                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '160px'}}>Firma</TableHead>
-                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '50px'}}>Kişi</TableHead>
-                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '110px'}}>Ödeme</TableHead>
-                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '80px'}}>Tutar</TableHead>
-                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '100px'}}>Alış</TableHead>
+                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '60px'}}>SERİ</TableHead>
+                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '65px'}}>TARİH</TableHead>
+                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '160px'}}>FİRMA</TableHead>
+                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '110px'}}>ÖDEME</TableHead>
+                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '220px'}}>TUR ŞABLONU</TableHead>
+                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '100px'}}>MÜŞTERİ</TableHead>
+                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '110px'}}>İLETİŞİM</TableHead>
+                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '50px'}}>KİŞİ SAYISI</TableHead>
+                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '140px'}}>ALIŞ YERİ</TableHead>
+                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '100px'}}>ALIŞ</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1084,25 +1084,40 @@ export function MainDashboard({ onNavigate, financialData = [], toursData = [], 
                         <TableRow 
                           key={`reservation-${reservation.id || index}`}
                           className={`${rowBgClass} relative`}
-                        >
-                          <TableCell className="font-bold text-sm border-r border-gray-200 text-center align-top py-2 px-2" style={{width: '60px'}}>
+                        >                          <TableCell className="font-bold text-sm border-r border-gray-200 text-center align-top py-2 px-2" style={{width: '60px'}}>
                             <div className="text-xs text-gray-500 leading-tight">RZV-</div>
                             <div className="text-sm font-bold leading-tight">{reservation.seriNumarasi?.replace('RZV-', '') || '0001'}</div>
                           </TableCell>
                           <TableCell className="font-medium border-r border-gray-200 text-center align-top py-2 px-2" style={{width: '65px'}}>
                             <div className="font-bold text-sm leading-tight">{format(new Date(reservation.turTarihi), "dd", { locale: tr })}</div>
                             <div className="text-xs text-gray-500 leading-tight">{format(new Date(reservation.turTarihi), "MMM", { locale: tr })}</div>
-                          </TableCell>
-                          <TableCell className="border-r border-gray-200 align-top py-2 px-2" style={{width: '220px'}}>
+                          </TableCell>                          <TableCell className="text-sm border-r border-gray-200 text-center align-top py-2 px-2" style={{width: '160px'}}>
+                            <div className="space-y-1">
+                              <div className="font-medium text-xs leading-tight">{reservation.firma}</div>
+                              <div className="text-xs text-gray-500 leading-tight">{reservation.yetkiliKisi}</div>
+                            </div>
+                          </TableCell><TableCell className="border-r border-gray-200 align-top py-2 px-2" style={{width: '110px'}}>
+                            <div className="space-y-1 text-center">
+                              {getStatusBadge(reservation.odemeDurumu)}
+                              <div className="text-xs text-gray-500 leading-tight">
+                                {(reservation.odemeYapan || reservation.odemeYontemi) && (
+                                  <div>{reservation.odemeYapan || ''}{reservation.odemeYapan && reservation.odemeYontemi ? '/' : ''}{reservation.odemeYontemi || ''}</div>
+                                )}
+                                <div className="font-medium text-gray-800">
+                                  {formatCurrencyLocal(reservation.tutar, reservation.paraBirimi)}
+                                </div>
+                              </div>
+                            </div>
+                          </TableCell>                          <TableCell className="border-r border-gray-200 text-center align-top py-2 px-2" style={{width: '220px'}}>
                             <div className="space-y-1">
                               <div className="font-medium text-sm leading-tight">{getTourTemplateName(reservation.turSablonu)}</div>
-                              <div className="flex items-center gap-1 text-xs text-gray-500">
+                              <div className="flex items-center justify-center gap-1 text-xs text-gray-500">
                                 <MapPin className="h-3 w-3 flex-shrink-0" />
                                 <span className="leading-tight">{getDestinationName(reservation.destinasyon)}</span>
                               </div>
                             </div>
                           </TableCell>
-                          <TableCell className="font-medium border-r border-gray-200 align-top py-2 px-2" style={{width: '100px'}}>
+                          <TableCell className="font-medium border-r border-gray-200 text-center align-top py-2 px-2" style={{width: '100px'}}>
                             <div className="space-y-1">
                               <div className="text-sm font-medium leading-tight">{splitCustomerName(reservation.musteriAdiSoyadi).line1}</div>
                               {splitCustomerName(reservation.musteriAdiSoyadi).line2 && (
@@ -1120,7 +1135,16 @@ export function MainDashboard({ onNavigate, financialData = [], toursData = [], 
                                 <div className="text-xs text-gray-600 leading-tight">{formatPhoneNumber(reservation.telefon).line2}</div>
                               )}
                             </div>
-                          </TableCell>                          <TableCell className="border-r border-gray-200 align-top py-2 px-2" style={{width: '140px'}}>
+                          </TableCell>
+                          <TableCell className="border-r border-gray-200 text-center align-top py-2 px-2" style={{width: '50px'}}>
+                            <div className="flex items-center justify-center gap-1 text-sm">
+                              <Users className="h-3 w-3 flex-shrink-0" />
+                              <span className="text-sm font-medium">
+                                {parseInt(reservation.yetiskinSayisi?.toString() || "0")}
+                                {parseInt(reservation.cocukSayisi?.toString() || "0") > 0 && `+${parseInt(reservation.cocukSayisi?.toString() || "0")}Ç`}
+                              </span>
+                            </div>
+                          </TableCell>                          <TableCell className="border-r border-gray-200 text-center align-top py-2 px-2" style={{width: '140px'}}>
                             <div className="space-y-1">
                               <div className="font-medium text-sm leading-tight">{reservation.alisYeri}</div>
                               <div className="text-xs text-gray-500 leading-tight">
@@ -1136,37 +1160,6 @@ export function MainDashboard({ onNavigate, financialData = [], toursData = [], 
                                 ) : ""}
                               </div>
                             </div>
-                          </TableCell>
-                          <TableCell className="text-sm border-r border-gray-200 align-top py-2 px-2" style={{width: '160px'}}>
-                            <div className="space-y-1">
-                              <div className="font-medium text-xs leading-tight">{reservation.firma}</div>
-                              <div className="text-xs text-gray-500 leading-tight">{reservation.yetkiliKisi}</div>
-                            </div>
-                          </TableCell>
-                          <TableCell className="border-r border-gray-200 text-center align-top py-2 px-2" style={{width: '50px'}}>
-                            <div className="flex items-center justify-center gap-1 text-sm">
-                              <Users className="h-3 w-3 flex-shrink-0" />
-                              <span className="text-sm font-medium">
-                                {parseInt(reservation.yetiskinSayisi?.toString() || "0")}
-                                {parseInt(reservation.cocukSayisi?.toString() || "0") > 0 && `+${parseInt(reservation.cocukSayisi?.toString() || "0")}Ç`}
-                              </span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="border-r border-gray-200 align-top py-2 px-2" style={{width: '110px'}}>
-                            <div className="space-y-1">
-                              {getStatusBadge(reservation.odemeDurumu)}
-                              <div className="text-xs text-gray-500 leading-tight">
-                                {reservation.odemeYapan && (
-                                  <div>{reservation.odemeYapan}</div>
-                                )}
-                                {reservation.odemeYontemi && (
-                                  <div>{reservation.odemeYontemi}</div>
-                                )}
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell className="font-medium border-r border-gray-200 text-right align-top py-2 px-2" style={{width: '80px'}}>
-                            <div className="text-sm font-medium leading-tight">{formatCurrencyLocal(reservation.tutar, reservation.paraBirimi)}</div>
                           </TableCell>
                           <TableCell className="border-r border-gray-200 text-center align-top py-2 px-2" style={{width: '100px'}}>
                             <div className="text-sm space-y-1">
@@ -1197,7 +1190,7 @@ export function MainDashboard({ onNavigate, financialData = [], toursData = [], 
                                 <div className="text-xs text-gray-500 leading-tight">
                                   {reservation.alisDetaylari?.["Adres"] ? 
                                     (reservation.alisDetaylari["Adres"].length > 15 ? 
-                                      reservation.alisDetaylari["Adres"].substring(0, 15) + "..." : 
+                                      reservation.alisDetaylari["Adres"].substring(0, 15) + "..." :
                                       reservation.alisDetaylari["Adres"]) : "Adres belirtilmemiş"}
                                 </div>
                               ) : (

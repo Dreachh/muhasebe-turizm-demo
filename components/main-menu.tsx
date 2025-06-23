@@ -63,7 +63,7 @@ export function MainMenu({ onNavigate }: { onNavigate: (id: string) => void }) {
     <div className="container mx-auto py-6">
       <Card>
         <CardHeader>
-          <CardTitle className="text-2xl">PassionisTravel Yönetim Sistemi</CardTitle>
+          <CardTitle className="text-2xl">Nehir Travel Yönetim Sistemi</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

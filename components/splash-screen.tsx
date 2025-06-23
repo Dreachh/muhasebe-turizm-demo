@@ -47,7 +47,7 @@ export function SplashScreen({ onFinish = () => {} }) {
         <CardContent className="pt-6">
           <div className="flex flex-col items-center justify-center space-y-6">
             <div className="text-center">
-              <img src="/logo.svg" alt="PassionisTravel Logo" className="h-32 mx-auto mb-4" width="200" height="60" />
+              <img src="/logo.svg" alt="Nehir Travel Logo" className="h-32 mx-auto mb-4" width="200" height="60" />
               <p className="text-lg text-muted-foreground">Yönetim Sistemi</p>
             </div>
 
@@ -57,7 +57,7 @@ export function SplashScreen({ onFinish = () => {} }) {
             </div>
 
             <p className="text-xs text-center text-muted-foreground">
-              © {new Date().getFullYear()} PassionisTravel. Tüm hakları saklıdır.
+              © {new Date().getFullYear()} Nehir Travel. Tüm hakları saklıdır.
             </p>
           </div>
         </CardContent>

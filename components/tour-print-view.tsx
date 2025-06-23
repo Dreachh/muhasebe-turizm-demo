@@ -41,13 +41,13 @@ function getActivityParticipantInfo(activity: any, tour: any): ActivityParticipa
 }
 
 export function TourPrintView({ tour, companyInfo = {
-  name: "PassionisTravel",
+  name: "Nehir Travel",
   address: "",
   phone: "",
   email: "",
   website: "",
   logo: null,
-  footerText: "Bu belge PassionisTravel tarafından düzenlenmiştir."
+  footerText: "Bu belge Nehir Travel tarafından düzenlenmiştir."
 } }) {
   if (!tour) return null
   

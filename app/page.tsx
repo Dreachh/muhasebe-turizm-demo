@@ -839,7 +839,7 @@ export default function Home() {  const [currentView, setCurrentView] = useState
           )}
         </div>
         <footer className="py-4 px-6 text-center text-muted-foreground border-t bg-white">
-          <p>&copy; {new Date().getFullYear()} PassionisTravel Yönetim Sistemi. Tüm hakları saklıdır.</p>
+          <p>&copy; {new Date().getFullYear()} Nehir Travel Yönetim Sistemi. Tüm hakları saklıdır.</p>
         </footer>
       </div>
     </div>
