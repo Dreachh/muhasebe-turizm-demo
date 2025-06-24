@@ -111,44 +111,33 @@ export default function PrintReservationsPage() {
       </div>
 
       {/* Print Header */}
-      <div className="mb-6 border-b-2 border-gray-300 pb-4">
-        <div className="flex flex-row items-start justify-between mb-4">
-          {/* Logo ve Şirket */}
-          <div className="flex-1">
-            <div className="flex flex-col">
-              <img src="/logo.svg" alt="Nehir Travel" className="h-20 w-auto" />
-              <span className="text-md font-bold text-gray-800 mt-2">Turizm ve Seyahat Acentası</span>
-            </div>
+      <div className="mb-2 border-b-2 border-gray-300 pb-1">
+        {/* 1. Satır: Logo | Başlık | Tarih */}
+        <div className="flex flex-row items-center justify-between mb-0" style={{ minHeight: 40 }}>
+          {/* Logo */}
+          <div style={{ width: 180, display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+            <img src="/logo.svg" alt="Nehir Travel" style={{ width: 170, height: 'auto', display: 'block', marginBottom: 0 }} />
+            <span className="text-xs font-bold text-gray-800" style={{ width: 170, display: 'block', lineHeight: 1.1, textAlign: 'left', whiteSpace: 'nowrap', marginTop: 2 }}>Turizm ve Seyahat Acentası</span>
           </div>
-          
+          {/* Başlık */}
+          <div className="flex-1 flex justify-center">
+            <h1 className="text-xl font-bold text-gray-900 mb-0 leading-tight text-center" style={{marginTop: 0}}>REZERVASYON LİSTESİ</h1>
+          </div>
           {/* Tarih ve Saat */}
-          <div className="flex-1 text-right">
-            <div className="text-sm text-gray-600">
+          <div style={{ minWidth: 120, textAlign: 'right' }}>
+            <div className="text-xs text-gray-600">
               <div className="font-medium">{format(new Date(), "dd MMMM yyyy", { locale: tr })}</div>
               <div>{format(new Date(), "HH:mm", { locale: tr })}</div>
             </div>
           </div>
         </div>
-        
-        {/* Başlık ve Özet */}
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-1">REZERVASYON LİSTESİ</h1>
+        {/* 2. Satır: boş | Toplam rezervasyon */}
+        <div className="flex flex-row items-center justify-between mt-0 mb-1" style={{ minHeight: 24 }}>
+          <span style={{ width: 170 }}></span>
+          <span></span>
           {printData && printData.reservations && (
-            <p className="text-sm text-gray-500">
-              Toplam {printData.reservations.length} rezervasyon
-            </p>
+            <span className="text-xs text-gray-500 text-right" style={{ whiteSpace: 'nowrap' }}>Toplam {printData.reservations.length} rezervasyon</span>
           )}
-          <div className="text-sm text-gray-600 space-y-1 mt-2">
-            {printData?.filters.dateRange?.from && (
-              <p>
-                Tarih Aralığı: {format(new Date(printData.filters.dateRange.from), "dd MMM yyyy", { locale: tr })}
-                {printData.filters.dateRange.to && ` - ${format(new Date(printData.filters.dateRange.to), "dd MMM yyyy", { locale: tr })}`}
-              </p>
-            )}
-            {printData?.filters.filter !== "Tümü" && <p>Destinasyon: {printData.filters.filter}</p>}
-            {printData?.filters.selectedAgency !== "Tümü" && <p>Acenta: {printData.filters.selectedAgency}</p>}
-            {printData?.filters.selectedPaymentStatus !== "Tümü" && <p>Ödeme Durumu: {printData.filters.selectedPaymentStatus}</p>}
-          </div>
         </div>
       </div>
 
@@ -238,14 +227,29 @@ export default function PrintReservationsPage() {
                                 `+${parseInt(reservation.cocukSayisi?.toString() || "0")}Ç`}
                             </span>
                           </div>
-                        </TableCell>
-                        <TableCell className="border-r border-gray-400 text-center text-xs py-2">
-                          <div className="font-medium">{reservation.alisYeri || '-'}</div>
-                        </TableCell>
-                        <TableCell className="text-center text-xs py-2">
-                          <div className="flex items-center justify-center gap-1">
-                            <Clock className="h-3 w-3 flex-shrink-0" />
-                            <span>{reservation.alisSaati || "-"}</span>
+                        </TableCell>                        <TableCell className="border-r border-gray-400 text-center text-xs py-2">
+                          <div className="font-medium">
+                            {reservation.alisYeri || '-'}
+                            {reservation.alisYeri && reservation.firma && (
+                              <div className="text-gray-500">{reservation.firma}</div>
+                            )}
+                          </div>
+                        </TableCell>                        <TableCell className="text-center text-xs py-2">
+                          <div className="text-center">
+                            {/* ALIŞ SAATİ: Öncelik sırası: alisDetaylari["Alış Saati"] > alisSaati > diğer alanlar */}
+                            <div className="font-medium">
+                              {reservation.alisDetaylari && reservation.alisDetaylari["Alış Saati"]
+                                ? reservation.alisDetaylari["Alış Saati"]
+                                : (reservation.alisSaati || reservation.alis_saat || reservation.alis_saatı || reservation.pickupTime || reservation.pickup_time || '-')}
+                            </div>
+                            {/* Oda numarası gösterimi: alisDetaylari["Oda Numarası"] > odaNumarasi > diğer alanlar */}
+                            {(reservation.alisDetaylari && reservation.alisDetaylari["Oda Numarası"]) || reservation.odaNumarasi || reservation.oda_numarasi || reservation.roomNumber ? (
+                              <div className="text-gray-500 text-xs">
+                                Oda: {reservation.alisDetaylari && reservation.alisDetaylari["Oda Numarası"]
+                                  ? reservation.alisDetaylari["Oda Numarası"]
+                                  : (reservation.odaNumarasi || reservation.oda_numarasi || reservation.roomNumber)}
+                              </div>
+                            ) : null}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -277,8 +281,23 @@ export default function PrintReservationsPage() {
             width: 100% !important;
             padding: 0 !important;
             margin: 0 !important;
-          }          img {
-            height: 200px !important;
+          }
+          img {
+            width: 170px !important;
+            height: auto !important;
+            display: block !important;
+            margin-bottom: 0 !important;
+            margin-top: 0 !important;
+            padding: 0 !important;
+          }
+          .print-header-logo-text {
+            margin: 0 !important;
+            padding: 0 !important;
+            line-height: 1.1 !important;
+            white-space: nowrap !important;
+            font-size: 11px !important;
+            text-align: left !important;
+            width: 170px !important;
           }
           table {
             font-size: 8px !important;

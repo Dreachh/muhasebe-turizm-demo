@@ -220,7 +220,9 @@ export function RezervasyonListe({
         reservation.telefon?.includes(searchTerm) ||
         reservation.seriNumarasi?.toLowerCase().includes(searchTerm.toLowerCase())
       
-      const matchesDestination = filter === "Tümü" || reservation.destinasyon === filter
+      const matchesDestination = filter === "Tümü" || 
+        getDestinationName(reservation.destinasyon) === filter ||
+        reservation.destinasyon === filter
       const matchesAgency = selectedAgency === "Tümü" || reservation.firma === selectedAgency
       const matchesPayment = selectedPaymentStatus === "Tümü" || reservation.odemeDurumu === selectedPaymentStatus
 
