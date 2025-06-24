@@ -519,30 +519,29 @@ export function RezervasyonListe({
                 </CardTitle>
               </CardHeader><CardContent className="p-0 relative print:overflow-visible">                <div className="overflow-x-auto print:overflow-visible">
                   <Table className="border-collapse table-auto w-full print:text-xs">                    <colgroup>
-                      <col style={{width: '60px'}}/>
-                      <col style={{width: '65px'}}/>
-                      <col style={{width: '160px'}}/>
-                      <col style={{width: '110px'}}/>
-                      <col style={{width: '220px'}}/>
-                      <col style={{width: '100px'}}/>
-                      <col style={{width: '110px'}}/>
-                      <col style={{width: '50px'}} />
-                      <col style={{width: '140px'}} />
-                      <col style={{width: '100px'}} />
-                    </colgroup>
+  <col style={{width: '55px'}}/> {/* TARİH - daha dar */}
+  <col style={{width: '150px'}}/> {/* FİRMA - daha geniş */}
+  <col style={{width: '95px'}}/> {/* ÖDEME - daha dar */}
+  <col style={{width: '190px'}}/> {/* TUR ŞABLONU - daha geniş */}
+  <col style={{width: '130px'}}/> {/* MÜŞTERİ - daha geniş */}
+  <col style={{width: '120px'}}/> {/* İLETİŞİM - daha dar */}
+  <col style={{width: '55px'}} />
+  <col style={{width: '160px'}} /> {/* ALIŞ YERİ - daha geniş */}
+  <col style={{width: '80px'}} /> {/* ALIŞ - daha dar */}
+  <col style={{width: '40px'}} />
+</colgroup>
                     <TableHeader>
-                      <TableRow className="border-b-2 border-black bg-gray-100 print:border-b print:border-gray-600">
-                        <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2 print:py-1 print:px-1 print:border-r-gray-400" style={{width: '60px'}}>SERİ</TableHead>
-                        <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2 print:py-1 print:px-1 print:border-r-gray-400" style={{width: '65px'}}>TARİH</TableHead>
-                        <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2 print:py-1 print:px-1 print:border-r-gray-400" style={{width: '160px'}}>FİRMA</TableHead>
-                        <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2 print:py-1 print:px-1 print:border-r-gray-400" style={{width: '110px'}}>ÖDEME</TableHead>
-                        <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2 print:py-1 print:px-1 print:border-r-gray-400" style={{width: '220px'}}>TUR ŞABLONU</TableHead>
-                        <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2 print:py-1 print:px-1 print:border-r-gray-400" style={{width: '100px'}}>MÜŞTERİ</TableHead>
-                        <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2 print:py-1 print:px-1 print:border-r-gray-400" style={{width: '110px'}}>İLETİŞİM</TableHead>
-                        <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2 print:py-1 print:px-1 print:border-r-gray-400" style={{width: '50px'}}>KİŞİ SAYISI</TableHead>
-                        <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2 print:py-1 print:px-1 print:border-r-gray-400" style={{width: '140px'}}>ALIŞ YERİ</TableHead>
-                        <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2 print:py-1 print:px-1 print:border-r-gray-400" style={{width: '100px'}}>ALIŞ</TableHead>
-                        <TableHead className="print:hidden text-center py-2 px-1" style={{width: '40px'}}><Settings className="h-4 w-4 mx-auto" /></TableHead>
+                      <TableRow className="border-b-2 border-black bg-gray-100 print:border-b print:border-gray-600 h-2">
+                        <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-0 px-0.5 print:py-0 print:px-0 print:border-r-gray-400" style={{width: '55px'}}>TARİH</TableHead>
+                        <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-0 px-0.5 print:py-0 print:px-0 print:border-r-gray-400" style={{width: '150px'}}>FİRMA</TableHead>
+                        <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-0 px-0.5 print:py-0 print:px-0 print:border-r-gray-400" style={{width: '95px'}}>ÖDEME</TableHead>
+                        <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-0 px-0.5 print:py-0 print:px-0 print:border-r-gray-400" style={{width: '190px'}}>TUR ŞABLONU</TableHead>
+                        <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-0 px-0.5 print:py-0 print:px-0 print:border-r-gray-400" style={{width: '130px'}}>MÜŞTERİ</TableHead>
+                        <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-0 px-0.5 print:py-0 print:px-0 print:border-r-gray-400" style={{width: '120px'}}>İLETİŞİM</TableHead>
+                        <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-0 px-0.5 print:py-0 print:px-0 print:border-r-gray-400" style={{width: '55px'}}>K.SAYISI</TableHead>
+                        <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-0 px-0.5 print:py-0 print:px-0 print:border-r-gray-400" style={{width: '160px'}}>ALIŞ YERİ</TableHead>
+                        <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-0 px-0.5 print:py-0 print:px-0 print:border-r-gray-400" style={{width: '80px'}}>ALIŞ</TableHead>
+                        <TableHead className="print:hidden text-center py-0 px-0" style={{width: '40px'}}><Settings className="h-4 w-4 mx-auto" /></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -589,110 +588,71 @@ export function RezervasyonListe({
                         } else if (reservationDate >= dayAfterTomorrow && reservationDate < threeDaysLater) {
                           // Öbür gün (3 gün kalan) - Açık kırmızı
                           rowBgClass = "bg-red-50 border-l-4 border-red-300";                          printBgClass = "print:bg-gray-25 print:border-l-2 print:border-l-gray-400";
-                        }
-                        rows.push(
+                        }                        rows.push(
                           <TableRow
                             key={reservation.id}
                             className={`${rowBgClass} ${printBgClass} relative print:break-inside-avoid`}
-                          >                            <TableCell className="font-bold text-sm border-r border-gray-200 text-center align-top py-2 px-2 print:py-1 print:px-1 print:border-r-gray-400" style={{width: '60px'}}>
-                              <div className="text-xs text-gray-500 leading-tight print:text-2xs">RZV-</div>
-                              <div className="text-sm font-bold leading-tight print:text-xs">{reservation.seriNumarasi?.replace('RZV-', '') || '0001'}</div>
-                            </TableCell>
-                            <TableCell className="font-medium border-r border-gray-200 text-center align-top py-2 px-2 print:py-1 print:px-1 print:border-r-gray-400" style={{width: '65px'}}>
-                              <div className="font-bold text-sm leading-tight print:text-xs">{format(new Date(reservation.turTarihi), "dd", { locale: tr })}</div>
-                              <div className="text-xs text-gray-500 leading-tight print:text-2xs">{format(new Date(reservation.turTarihi), "MMM", { locale: tr })}</div>
-                            </TableCell>                            <TableCell className="text-sm border-r border-gray-200 text-center align-top py-2 px-2" style={{width: '160px'}}>
-                              <div className="space-y-1">
-                                <div className="font-medium text-xs leading-tight">{reservation.firma}</div>
-                                <div className="text-xs text-gray-500 leading-tight">{reservation.yetkiliKisi}</div>
-                              </div>
-                            </TableCell><TableCell className="border-r border-gray-200 align-top py-2 px-2" style={{width: '110px'}}>
-                              <div className="space-y-1 text-center">
-                                {getStatusBadge(reservation.odemeDurumu)}
-                                <div className="text-xs text-gray-500 leading-tight">
-                                  {(reservation.odemeYapan || reservation.odemeYontemi) && (
-                                    <div>{reservation.odemeYapan || ''}{reservation.odemeYapan && reservation.odemeYontemi ? '/' : ''}{reservation.odemeYontemi || ''}</div>
-                                  )}
-                                  <div className="font-medium text-gray-800">
-                                    {formatCurrency(reservation.tutar, reservation.paraBirimi)}
-                                  </div>
-                                </div>
-                              </div>
-                            </TableCell>                            <TableCell className="border-r border-gray-200 text-center align-top py-2 px-2" style={{width: '220px'}}>
-                              <div className="space-y-1">
-                                <div className="font-medium text-sm leading-tight">{getTourTemplateName(reservation.turSablonu)}</div>
-                                <div className="flex items-center justify-center gap-1 text-xs text-gray-500">
-                                  <MapPin className="h-3 w-3 flex-shrink-0" />
-                                  <span className="leading-tight">{getDestinationName(reservation.destinasyon)}</span>
-                                </div>
+                          >                            <TableCell className="font-medium border-r border-gray-200 text-center align-top py-0 px-0.5 print:py-0 print:px-0 print:border-r-gray-400 h-5" style={{width: '55px'}}>
+                              <div className="font-bold text-xs leading-none print:text-xs">
+                                {format(new Date(reservation.turTarihi), "dd MMM", { locale: tr })}
                               </div>
                             </TableCell>
-                            <TableCell className="font-medium border-r border-gray-200 text-center align-top py-2 px-2" style={{width: '100px'}}>
-                              <div className="space-y-1">
-                                <div className="text-sm font-medium leading-tight">{splitCustomerName(reservation.musteriAdiSoyadi).line1}</div>
-                                {splitCustomerName(reservation.musteriAdiSoyadi).line2 && (
-                                  <div className="text-sm font-medium leading-tight">{splitCustomerName(reservation.musteriAdiSoyadi).line2}</div>
+                            <TableCell className="text-sm border-r border-gray-200 text-center align-top py-0 px-0.5 h-5" style={{width: '150px'}}>
+                              <div className="font-medium text-xs leading-none">{reservation.firma}</div>
+                            </TableCell>                            <TableCell className="border-r border-gray-200 align-top py-0 px-0.5 h-5" style={{width: '95px'}}>
+                              <div className="text-center text-xs leading-none">
+                                {reservation.odemeDurumu === "Ödendi" ? (
+                                  <span className="font-medium text-green-700">Ödendi</span>
+                                ) : (
+                                  <span className="text-gray-600">
+                                    {reservation.odemeYapan || 'Ödeme Yapan'} / {formatCurrency(reservation.tutar, reservation.paraBirimi)}
+                                  </span>
                                 )}
+                              </div>
+                            </TableCell>                            <TableCell className="border-r border-gray-200 text-center align-top py-0 px-0.5 h-5" style={{width: '190px'}}>
+                              <div className="font-medium text-xs leading-none">{getTourTemplateName(reservation.turSablonu)}</div>
+                            </TableCell>                            <TableCell className="font-medium border-r border-gray-200 text-center align-top py-0 px-0.5 h-5" style={{width: '130px'}}>
+                              <div className="text-xs font-medium leading-none">
+                                {reservation.musteriAdiSoyadi}
                                 {reservation.katilimcilar && reservation.katilimcilar.length > 0 && (
-                                  <div className="text-xs text-gray-500 leading-tight">+{reservation.katilimcilar.length} katılımcı</div>
+                                  <span className="text-xs text-gray-500 ml-1">(+{reservation.katilimcilar.length})</span>
                                 )}
                               </div>
-                            </TableCell>
-                            <TableCell className="border-r border-gray-200 text-center align-top py-2 px-2" style={{width: '110px'}}>
-                              <div className="text-sm space-y-1">
-                                <div className="font-medium leading-tight">{formatPhoneNumber(reservation.telefon).line1}</div>
-                                {formatPhoneNumber(reservation.telefon).line2 && (
-                                  <div className="text-xs text-gray-600 leading-tight">{formatPhoneNumber(reservation.telefon).line2}</div>
-                                )}
+                            </TableCell>                            <TableCell className="border-r border-gray-200 text-center align-top py-0 px-0.5 h-5" style={{width: '120px'}}>
+                              <div className="text-xs font-medium leading-none">
+                                {reservation.telefon}
                               </div>
-                            </TableCell>
-                            <TableCell className="border-r border-gray-200 text-center align-top py-2 px-2" style={{width: '50px'}}>
-                              <div className="flex items-center justify-center gap-1 text-sm">
+                            </TableCell>                            <TableCell className="border-r border-gray-200 text-center align-top py-0 px-0.5 h-5" style={{width: '55px'}}>
+                              <div className="flex items-center justify-center gap-1 text-xs">
                                 <Users className="h-3 w-3 flex-shrink-0" />
-                                <span className="text-sm font-medium">
+                                <span className="text-xs font-medium">
                                   {parseInt(reservation.yetiskinSayisi?.toString() || "0")}
                                   {parseInt(reservation.cocukSayisi?.toString() || "0") > 0 && `+${parseInt(reservation.cocukSayisi?.toString() || "0")}Ç`}
                                 </span>
                               </div>
-                            </TableCell>                            <TableCell className="border-r border-gray-200 text-center align-top py-2 px-2" style={{width: '140px'}}>
-                              <div className="space-y-1">
-                                <div className="font-medium text-sm leading-tight">{reservation.alisYeri}</div>
-                                <div className="text-xs text-gray-500 leading-tight">
-                                  {(reservation.alisDetaylari as any)?.["Otel Adı"] ||
-                                    (reservation.alisDetaylari as any)?.["Acenta Adı"] ||
-                                    ""}
-                                </div>
+                            </TableCell>                            <TableCell className="border-r border-gray-200 text-center align-top py-0 px-0.5 h-5" style={{width: '160px'}}>
+                              <div className="font-medium text-xs leading-none">
+                                {(reservation.alisDetaylari as any)?.["Otel Adı"] ||
+                                  (reservation.alisDetaylari as any)?.["Acenta Adı"] ||
+                                  reservation.alisYeri}
                               </div>
-                            </TableCell>
-                            <TableCell className="border-r border-gray-200 text-center align-top py-2 px-2 print:px-1" style={{width: '100px'}}>
-                              <div className="text-sm space-y-1">
-                                {reservation.alisDetaylari && reservation.alisDetaylari["Alış Saati"] && (
-                                  <div className="flex items-center justify-center gap-1 text-xs text-gray-500">
-                                    <Clock className="h-3 w-3 flex-shrink-0" />
-                                    <span className="leading-tight">{reservation.alisDetaylari["Alış Saati"]}</span>
-                                  </div>
-                                )}
-                                
-                                {/* Alış yeri kontrolü - Acenta ise firma adı, Otel ise oda bilgisi */}
-                                {reservation.alisYeri === "Acenta" ? (
-                                  <div className="text-xs text-gray-500 leading-tight">
-                                    {reservation.firma || "Acenta"}
-                                  </div>
-                                ) : (
-                                  // Otel durumunda oda bilgisini göster
-                                  reservation.alisDetaylari && reservation.alisDetaylari["Oda Numarası"] ? (
-                                    <div className="text-xs text-gray-500 leading-tight">
-                                      Oda: {reservation.alisDetaylari["Oda Numarası"]}
-                                    </div>
-                                  ) : (
-                                    <div className="text-xs text-gray-500 leading-tight">
-                                      {reservation.alisDetaylari?.["Otel Adı"] || "Otel"}
-                                    </div>
-                                  )
-                                )}
+                            </TableCell>                            <TableCell className="border-r border-gray-200 text-center align-top py-0 px-0.5 print:px-0 h-5" style={{width: '80px'}}>                              <div className="text-xs">
+                                {(() => {
+                                  const alisSaati = reservation.alisDetaylari && reservation.alisDetaylari["Alış Saati"] ? reservation.alisDetaylari["Alış Saati"] : "";
+                                  const odaNumarasi = reservation.alisDetaylari && reservation.alisDetaylari["Oda Numarası"] ? reservation.alisDetaylari["Oda Numarası"] : "";
+                                  
+                                  if (alisSaati && odaNumarasi) {
+                                    return `${alisSaati} Oda:${odaNumarasi}`;
+                                  } else if (alisSaati) {
+                                    return alisSaati;
+                                  } else if (odaNumarasi) {
+                                    return `Oda:${odaNumarasi}`;
+                                  } else {
+                                    return "-";
+                                  }
+                                })()}
                               </div>
-                            </TableCell>
-                            <TableCell className="print:hidden text-center align-top py-2 px-1" style={{width: '40px'}}>
+                            </TableCell>                            <TableCell className="print:hidden text-center align-top py-0 px-0 h-5" style={{width: '40px'}}>
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                   <Button variant="ghost" className="h-8 w-8 p-0">
@@ -745,43 +705,37 @@ export function RezervasyonListe({
                         };
 
                         const ozelIsteklerData = getOzelIsteklerFromAlisYeri(reservation);
-                        
-                        if (reservation.notlar || ozelIsteklerData) {
-                          rows.push(
-                            <TableRow key={`notes-${reservation.id}`} className="bg-gray-50 border-b border-black">
-                              <TableCell colSpan={12} className="p-0">
-                                <div className="flex h-1">
-                                  <div className="w-1/2 border-r border-gray-300 flex items-center px-1">
+                          if (reservation.notlar || ozelIsteklerData) {                          rows.push(                            <TableRow key={`notes-${reservation.id}`} className="bg-gray-50 border-b border-black">                              <TableCell colSpan={9} className="p-0 h-0 leading-none">
+                                <div className="flex items-center h-0 min-h-0 py-0 m-0">
+                                  <div className="w-1/2 border-r border-gray-300 flex items-center px-0.5 h-0 min-h-0">
                                     {reservation.notlar ? (
-                                      <div className="flex items-center gap-1">
-                                        <div className="w-1 h-1 bg-blue-500 rounded-full flex-shrink-0"></div>
-                                        <span className="text-sm font-medium text-blue-800">Notlar:</span>
-                                        <span className="text-sm text-blue-700 truncate">{reservation.notlar}</span>
+                                      <div className="flex items-center gap-0.5 h-0 min-h-0">
+                                        <div className="w-0.5 h-0.5 bg-blue-500 rounded-full flex-shrink-0"></div>
+                                        <span className="text-xs font-medium text-blue-800 leading-none">Notlar:</span>
+                                        <span className="text-xs text-blue-700 truncate leading-none">{reservation.notlar}</span>
                                       </div>
                                     ) : (
-                                      <span className="text-sm text-gray-400">Notlar: -</span>
+                                      <span className="text-xs text-gray-400 leading-none">Notlar: -</span>
                                     )}
                                   </div>
-                                  <div className="w-1/2 flex items-center px-1">
-                                    {ozelIsteklerData ? (
-                                      <div className="flex items-center gap-1">
-                                        <div className="w-1 h-1 bg-red-500 rounded-full flex-shrink-0"></div>
-                                        <span className="text-sm font-medium text-red-800">Özel İstekler:</span>
-                                        <span className="text-sm text-red-700 truncate">{ozelIsteklerData}</span>
+                                  <div className="w-1/2 flex items-center px-0.5 h-0 min-h-0">{ozelIsteklerData ? (
+                                      <div className="flex items-center gap-0.5 h-0 min-h-0">
+                                        <div className="w-0.5 h-0.5 bg-red-500 rounded-full flex-shrink-0"></div>
+                                        <span className="text-xs font-medium text-red-800 leading-none">Özel İstekler:</span>
+                                        <span className="text-xs text-red-700 truncate leading-none">{ozelIsteklerData}</span>
                                       </div>
                                     ) : (
-                                      <span className="text-sm text-gray-400">Özel İstekler: -</span>
+                                      <span className="text-xs text-gray-400 leading-none">Özel İstekler: -</span>
                                     )}
                                   </div>
                                 </div>
                               </TableCell>
                             </TableRow>
                           );
-                        } else {
-                          // Notları olmayan rezervasyonlar için ayırıcı çizgi
+                        } else {                          // Notları olmayan rezervasyonlar için ayırıcı çizgi
                           rows.push(
                             <TableRow key={`separator-${reservation.id}`} className="border-b border-black">
-                              <TableCell colSpan={12} className="p-0 h-1"></TableCell>
+                              <TableCell colSpan={9} className="p-0 h-0.5"></TableCell>
                             </TableRow>
                           );
                         }

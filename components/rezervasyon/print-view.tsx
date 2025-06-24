@@ -63,26 +63,6 @@ export default function PrintReservationsPage() {
     return found ? found.name : id
   }
 
-  if (!printData) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p>Veriler yükleniyor...</p>
-        </div>
-      </div>
-    )
-  }
-
-  // Destinasyon gruplama (isimle)
-  const groupedReservations = printData.reservations.reduce((groups: { [key: string]: any[] }, reservation) => {
-    let destinationId = reservation.destinasyon || reservation.selectedTourDestination || reservation.turSablonu || reservation.varişYeri || reservation.selectedTour?.destination || "Bilinmeyen Destinasyon"
-    let destination = getDestinationName(destinationId)
-    if (!groups[destination]) groups[destination] = []
-    groups[destination].push(reservation)
-    return groups
-  }, {})
-
   const formatCurrency = (amount: number, currency = 'TRY') => {
     return new Intl.NumberFormat('tr-TR', {
       style: 'currency',
@@ -106,6 +86,47 @@ export default function PrintReservationsPage() {
       </Badge>
     )
   }
+
+  // Alış yeri detaylarından özel istekler çıkarımı
+  const getOzelIsteklerFromAlisYeri = (reservation: any) => {
+    if (!reservation.alisYeri) return '';
+    switch (reservation.alisYeri) {
+      case 'Acenta':
+        return reservation.alisDetaylari?.Adres || '';
+      case 'Otel':
+        return reservation.alisDetaylari?.['Özel Talimatlar'] || '';
+      case 'Özel Adres':
+      case 'Buluşma Noktası':
+        return [
+          reservation.alisDetaylari?.Adres && `Adres: ${reservation.alisDetaylari?.Adres}`,
+          reservation.alisDetaylari?.['İletişim'] && `İletişim: ${reservation.alisDetaylari?.['İletişim']}`,
+          reservation.alisDetaylari?.['Özel Talimatlar'] && `Talimatlar: ${reservation.alisDetaylari?.['Özel Talimatlar']}`
+        ].filter(Boolean).join(' | ') || '';
+      default:
+        return '';
+    }
+  };
+
+  if (!printData) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p>Veriler yükleniyor...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Destinasyon gruplama (isimle)
+  const groupedReservations = printData.reservations.reduce((groups: { [key: string]: any[] }, reservation) => {
+    let destinationId = reservation.destinasyon || reservation.selectedTourDestination || reservation.turSablonu || reservation.varişYeri || reservation.selectedTour?.destination || "Bilinmeyen Destinasyon"
+    let destination = getDestinationName(destinationId)
+    if (!groups[destination]) groups[destination] = []
+    groups[destination].push(reservation)
+    return groups
+  }, {})
+
   return (
     <div className="min-h-screen bg-white p-8">
       {/* Sadece ekranda görünen Yazdır butonu */}
@@ -120,28 +141,26 @@ export default function PrintReservationsPage() {
 
       {/* Print Header */}
       <div className="mb-6 border-b-2 border-gray-300 pb-4">
-        <div className="flex flex-row items-center justify-between mb-4">
-          {/* Logo ve Şirket */}
-          <div className="flex items-center space-x-4">
-            <img src="/logo.svg" alt="Nehir Travel" className="h-20 w-auto" style={{ minHeight: 80 }} />
-            <div className="flex flex-col justify-center">
-              <span className="text-xl font-bold text-gray-900 leading-tight">Turizm ve Seyahat Acentası</span>
-            </div>
+        <div className="flex flex-row items-center justify-between">
+          {/* Sol: Nehir Travel */}
+          <div className="flex flex-col items-start">
+            <span className="text-2xl font-extrabold tracking-tight text-gray-900 leading-tight">Nehir Travel</span>
+            <span className="text-sm font-medium text-gray-700 -mt-1">Turizm ve Seyahat Acentası</span>
           </div>
-          {/* Toplam Rezervasyon */}
-          <div className="text-2xl font-bold text-gray-900 text-center">
-            Toplam {printData.reservations.length} rezervasyon
+          {/* Orta: Başlık ve toplam */}
+          <div className="flex flex-col items-center">
+            <span className="text-xl font-bold text-gray-900">REZERVASYON LİSTESİ</span>
+            <span className="text-sm text-gray-700 mt-1">Toplam {printData.reservations.length} rezervasyon</span>
           </div>
-          {/* Tarih ve Saat */}
-          <div className="text-right text-sm text-gray-600">
-            <div className="font-medium">{format(new Date(), "dd MMMM yyyy", { locale: tr })}</div>
-            <div>{format(new Date(), "HH:mm", { locale: tr })}</div>
+          {/* Sağ: Tarih ve saat */}
+          <div className="flex flex-col items-end text-sm text-gray-600">
+            <span className="font-medium">{format(new Date(), "dd MMMM yyyy", { locale: tr })}</span>
+            <span>{format(new Date(), "HH:mm", { locale: tr })}</span>
           </div>
         </div>
-        {/* Başlık ve Özet */}
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">REZERVASYON LİSTESİ</h1>
-          <div className="text-sm text-gray-600 space-y-1">
+        {/* Filtre özetleri */}
+        <div className="text-center mt-2">
+          <div className="text-xs text-gray-600 space-y-1">
             {printData.filters.dateRange?.from && (
               <p>
                 Tarih Aralığı: {format(printData.filters.dateRange.from, "dd MMM yyyy", { locale: tr })}
@@ -158,98 +177,105 @@ export default function PrintReservationsPage() {
       {/* Rezervasyon Grupları */}
       <div className="space-y-6">
         {Object.entries(groupedReservations).map(([destination, reservations]) => (
-          <Card key={destination} className="shadow-none border border-gray-400">
-            <CardHeader className="bg-gray-50 border-b border-gray-400">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <MapPin className="h-5 w-5 text-gray-700" />
-                {destination}
-                <Badge variant="secondary" className="ml-auto bg-gray-200 text-gray-800">
-                  {reservations.length} Rezervasyon
-                </Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-gray-100">
-                    <TableHead className="border-r border-gray-400 text-center font-bold text-xs py-2">Seri</TableHead>
-                    <TableHead className="border-r border-gray-400 text-center font-bold text-xs py-2">Tarih</TableHead>
-                    <TableHead className="border-r border-gray-400 text-center font-bold text-xs py-2">Tur Şablonu</TableHead>
-                    <TableHead className="border-r border-gray-400 text-center font-bold text-xs py-2">Müşteri</TableHead>
-                    <TableHead className="border-r border-gray-400 text-center font-bold text-xs py-2">İletişim</TableHead>
-                    <TableHead className="border-r border-gray-400 text-center font-bold text-xs py-2">Kişi</TableHead>
-                    <TableHead className="border-r border-gray-400 text-center font-bold text-xs py-2">Alış Yeri</TableHead>
-                    <TableHead className="border-r border-gray-400 text-center font-bold text-xs py-2">Firma</TableHead>
-                    <TableHead className="border-r border-gray-400 text-center font-bold text-xs py-2">Ödeme</TableHead>
-                    <TableHead className="text-center font-bold text-xs py-2">Tutar</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {reservations
-                    .sort((a, b) => {
-                      const dateA = new Date(a.turTarihi).getTime()
-                      const dateB = new Date(b.turTarihi).getTime()
-                      if (dateA !== dateB) return dateA - dateB
-                      return (a.alisSaati || "00:00").localeCompare(b.alisSaati || "00:00")
-                    })
-                    .map((reservation) => (
-                      <TableRow key={reservation.id} className="border-b border-gray-400">
-                        <TableCell className="border-r border-gray-400 text-center text-xs py-2">
-                          <div className="font-bold">{reservation.seriNumarasi?.replace('RZV-', '') || '0001'}</div>
-                        </TableCell>
-                        <TableCell className="border-r border-gray-400 text-center text-xs py-2">
-                          <div className="font-bold">{format(new Date(reservation.turTarihi), "dd", { locale: tr })}</div>
-                          <div className="text-gray-500">{format(new Date(reservation.turTarihi), "MMM", { locale: tr })}</div>
-                        </TableCell>
-                        <TableCell className="border-r border-gray-400 text-xs py-2">
-                          <div className="font-medium">{getTourTemplateName(reservation.turSablonu || reservation.selectedTourName || reservation.tourName || "-")}</div>
-                        </TableCell>
-                        <TableCell className="border-r border-gray-400 text-xs py-2">
-                          <div className="font-medium">{reservation.musteriAdiSoyadi}</div>
-                          {reservation.katilimcilar && reservation.katilimcilar.length > 0 && (
-                            <div className="text-gray-500">+{reservation.katilimcilar.length} katılımcı</div>
+          <div key={destination} className="border border-gray-400 rounded print:break-inside-avoid">
+            <div className="bg-gray-50 border-b border-gray-400 px-2 py-1 flex items-center gap-2">
+              <MapPin className="h-4 w-4 text-gray-700" />
+              <span className="text-sm font-semibold">{destination}</span>
+              <span className="ml-auto text-xs bg-gray-200 text-gray-800 rounded px-2 py-0.5">{reservations.length} Rezervasyon</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full border-collapse print:w-full" style={{fontSize: '11px'}}>
+                <colgroup>
+                  <col style={{width: '55px'}} /> {/* TARİH */}
+                  <col style={{width: '150px'}} /> {/* FİRMA */}
+                  <col style={{width: '95px'}} /> {/* ÖDEME */}
+                  <col style={{width: '190px'}} /> {/* TUR ŞABLONU */}
+                  <col style={{width: '130px'}} /> {/* MÜŞTERİ */}
+                  <col style={{width: '120px'}} /> {/* İLETİŞİM */}
+                  <col style={{width: '55px'}} /> {/* K.SAYISI */}
+                  <col style={{width: '160px'}} /> {/* ALIŞ YERİ */}
+                  <col style={{width: '80px'}} /> {/* ALIŞ */}
+                </colgroup>
+                <thead>
+                  <tr className="bg-gray-100 border-b-2 border-black h-2">
+                    <th className="border-r border-gray-200 text-center text-xs font-bold py-0 px-0.5 print:py-0 print:px-0 print:border-r-gray-400">TARİH</th>
+                    <th className="border-r border-gray-200 text-center text-xs font-bold py-0 px-0.5 print:py-0 print:px-0 print:border-r-gray-400">FİRMA</th>
+                    <th className="border-r border-gray-200 text-center text-xs font-bold py-0 px-0.5 print:py-0 print:px-0 print:border-r-gray-400">ÖDEME</th>
+                    <th className="border-r border-gray-200 text-center text-xs font-bold py-0 px-0.5 print:py-0 print:px-0 print:border-r-gray-400">TUR ŞABLONU</th>
+                    <th className="border-r border-gray-200 text-center text-xs font-bold py-0 px-0.5 print:py-0 print:px-0 print:border-r-gray-400">MÜŞTERİ</th>
+                    <th className="border-r border-gray-200 text-center text-xs font-bold py-0 px-0.5 print:py-0 print:px-0 print:border-r-gray-400">İLETİŞİM</th>
+                    <th className="border-r border-gray-200 text-center text-xs font-bold py-0 px-0.5 print:py-0 print:px-0 print:border-r-gray-400">K.SAYISI</th>
+                    <th className="border-r border-gray-200 text-center text-xs font-bold py-0 px-0.5 print:py-0 print:px-0 print:border-r-gray-400">ALIŞ YERİ</th>
+                    <th className="border-r border-gray-200 text-center text-xs font-bold py-0 px-0.5 print:py-0 print:px-0 print:border-r-gray-400">ALIŞ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {reservations.sort((a, b) => {
+                    const dateA = new Date(a.turTarihi).getTime();
+                    const dateB = new Date(b.turTarihi).getTime();
+                    if (dateA !== dateB) return dateA - dateB;
+                    return (a.alisSaati || "00:00").localeCompare(b.alisSaati || "00:00");
+                  }).map((reservation) => {
+                    const ozelIsteklerData = reservation.ozelIstekler || getOzelIsteklerFromAlisYeri(reservation);
+                    return [
+                      <tr key={reservation.id} className="border-b border-gray-300 print:break-inside-avoid">
+                        <td className="font-bold border-r border-gray-200 text-center align-top py-0 px-0.5 print:py-0 print:px-0 print:border-r-gray-400 h-5 text-xs leading-none">{format(new Date(reservation.turTarihi), "dd MMM", { locale: tr })}</td>
+                        <td className="font-medium border-r border-gray-200 text-center align-top py-0 px-0.5 h-5 text-xs leading-none">{reservation.firma}</td>
+                        <td className="border-r border-gray-200 align-top py-0 px-0.5 h-5 text-xs leading-none">
+                          {reservation.odemeDurumu === "Ödendi" ? (
+                            <span className="font-medium text-green-700">Ödendi</span>
+                          ) : (
+                            <span className="text-gray-600">{reservation.odemeYapan || 'Ödeme Yapan'} / {formatCurrency(reservation.tutar, reservation.paraBirimi)}</span>
                           )}
-                        </TableCell>
-                        <TableCell className="border-r border-gray-400 text-center text-xs py-2">
-                          <div className="font-medium">{reservation.telefon}</div>
-                        </TableCell>
-                        <TableCell className="border-r border-gray-400 text-center text-xs py-2">
-                          <div className="flex items-center justify-center gap-1">
+                        </td>
+                        <td className="border-r border-gray-200 text-center align-top py-0 px-0.5 h-5 text-xs leading-none">{getTourTemplateName(reservation.turSablonu)}</td>
+                        <td className="font-medium border-r border-gray-200 text-center align-top py-0 px-0.5 h-5 text-xs leading-none">{reservation.musteriAdiSoyadi}{reservation.katilimcilar && reservation.katilimcilar.length > 0 && (<span className="text-xs text-gray-500 ml-1">(+{reservation.katilimcilar.length})</span>)}</td>
+                        <td className="border-r border-gray-200 text-center align-top py-0 px-0.5 h-5 text-xs leading-none">{reservation.telefon}</td>
+                        <td className="border-r border-gray-200 text-center align-top py-0 px-0.5 h-5 text-xs leading-none">
+                          <div className="flex items-center justify-center gap-1 text-xs">
                             <Users className="h-3 w-3 flex-shrink-0" />
-                            <span className="font-medium">
-                              {parseInt(reservation.yetiskinSayisi?.toString() || "0")}
-                              {parseInt(reservation.cocukSayisi?.toString() || "0") > 0 && 
-                                `+${parseInt(reservation.cocukSayisi?.toString() || "0")}Ç`}
-                            </span>
+                            <span className="text-xs font-medium">{parseInt(reservation.yetiskinSayisi?.toString() || "0")}{parseInt(reservation.cocukSayisi?.toString() || "0") > 0 && `+${parseInt(reservation.cocukSayisi?.toString() || "0")}Ç`}</span>
                           </div>
-                        </TableCell>
-                        <TableCell className="border-r border-gray-400 text-xs py-2">
-                          <div className="font-medium">{reservation.alisYeri}</div>
-                          <div className="text-gray-500 flex items-center gap-1">
-                            <Clock className="h-3 w-3 flex-shrink-0" />
-                            <span>{reservation.alisSaati || "-"}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="border-r border-gray-400 text-xs py-2">
-                          <div className="font-medium">{reservation.firma}</div>
-                          <div className="text-gray-500">{reservation.yetkiliKisi}</div>
-                        </TableCell>
-                        <TableCell className="border-r border-gray-400 text-xs py-2">
-                          {getStatusBadge(reservation.odemeDurumu)}
-                          <div className="text-gray-500 mt-1">
-                            {reservation.odemeYapan && <div>{reservation.odemeYapan}</div>}
-                            {reservation.odemeYontemi && <div>{reservation.odemeYontemi}</div>}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right text-xs py-2">
-                          <div className="font-medium">{formatCurrency(reservation.tutar, reservation.paraBirimi)}</div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+                        </td>
+                        <td className="border-r border-gray-200 text-center align-top py-0 px-0.5 h-5 text-xs leading-none">{reservation.alisYeri}</td>
+                        <td className="border-r border-gray-200 text-center align-top py-0 px-0.5 print:px-0 h-5 text-xs leading-none">{reservation.alisSaati || '-'}</td>
+                      </tr>,
+                      (reservation.notlar || ozelIsteklerData) && (
+                        <tr key={`notes-${reservation.id}`} className="bg-gray-50 border-b border-black">
+                          <td colSpan={9} className="p-0 h-0 leading-none">
+                            <div className="flex items-center h-0 min-h-0 py-0 m-0">
+                              <div className="w-1/2 border-r border-gray-300 flex items-center px-0.5 h-0 min-h-0">
+                                {reservation.notlar ? (
+                                  <div className="flex items-center gap-0.5 h-0 min-h-0">
+                                    <div className="w-0.5 h-0.5 bg-blue-500 rounded-full flex-shrink-0"></div>
+                                    <span className="text-xs font-medium text-blue-800 leading-none">Notlar:</span>
+                                    <span className="text-xs text-blue-700 truncate leading-none">{reservation.notlar}</span>
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-gray-400 leading-none">Notlar: -</span>
+                                )}
+                              </div>
+                              <div className="w-1/2 flex items-center px-0.5 h-0 min-h-0">
+                                {ozelIsteklerData ? (
+                                  <div className="flex items-center gap-0.5 h-0 min-h-0">
+                                    <div className="w-0.5 h-0.5 bg-red-500 rounded-full flex-shrink-0"></div>
+                                    <span className="text-xs font-medium text-red-800 leading-none">Özel İstekler:</span>
+                                    <span className="text-xs text-red-700 truncate leading-none">{ozelIsteklerData}</span>
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-gray-400 leading-none">Özel İstekler: -</span>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    ];
+                  }).flat()}
+                </tbody>
+              </table>
+            </div>
+          </div>
         ))}
       </div>
 
@@ -274,11 +300,8 @@ export default function PrintReservationsPage() {
             padding: 0 !important;
             margin: 0 !important;
           }
-          img {
-            height: 60px !important;
-          }
           table {
-            font-size: 8px !important;
+            font-size: 9px !important;
             width: 100% !important;
           }
           th, td {

@@ -27,15 +27,11 @@ import {
 } from "@/lib/db"
 import { getTourTemplatesByDestination, getDestinations } from "@/lib/db-firebase"
 
-// Katılımcı interface'i
+// Katılımcı interface'i - Sadece gerekli alanları tut
 interface Katilimci {
   id: number
   ad: string
   soyad: string
-  telefon: string
-  email: string
-  tcKimlik: string
-  ulke: string
 }
 
 // Component props interface'i
@@ -59,17 +55,13 @@ interface RezervasyonFormData {
   alisSaati: string;
   musteriAdiSoyadi: string;
   telefon: string;
-  email: string;
-  adres: string;
-  tcKimlikPasaport: string;
-  vatandaslik: string;
-  referansKaynagi: string;
   alisYeri: string;
   alisDetaylari: Record<string, string>;
   firma: string;
   yetkiliKisi: string;
   yetkiliTelefon: string;
-  yetkiliEmail: string;  odemeYapan: string;
+  yetkiliEmail: string;
+  odemeYapan: string;
   odemeYontemi: string;
   odemeDurumu: string;
   tutar: string;
@@ -83,11 +75,10 @@ interface RezervasyonFormData {
 // Steps
 const steps = [
   { id: 1, title: "Tur Bilgileri", description: "Temel tur detayları" },
-  { id: 2, title: "Müşteri Bilgileri", description: "Müşteri ve katılımcılar" },
-  { id: 3, title: "Alış Yeri & Aracı", description: "Alış detayları ve aracı bilgileri" },
-  { id: 4, title: "Ödeme", description: "Ödeme durumu ve tutar" },
-  { id: 5, title: "Ek Bilgiler", description: "Notlar ve özel istekler" },
-  { id: 6, title: "Özet", description: "Bilgileri kontrol edin" },
+  { id: 2, title: "Müşteri & Alış Bilgileri", description: "Müşteri, alış yeri ve aracı bilgileri" },
+  { id: 3, title: "Ödeme", description: "Ödeme durumu ve tutar" },
+  { id: 4, title: "Ek Bilgiler", description: "Notlar ve özel istekler" },
+  { id: 5, title: "Özet", description: "Bilgileri kontrol edin" },
 ]
 
 // Initial form data - component dışında tanımla
@@ -100,17 +91,13 @@ const getInitialFormData = (): RezervasyonFormData => ({
   alisSaati: "",
   musteriAdiSoyadi: "",
   telefon: "",
-  email: "",
-  adres: "",
-  tcKimlikPasaport: "",
-  vatandaslik: "",
-  referansKaynagi: "",
   alisYeri: "",
   alisDetaylari: {},
   firma: "",
   yetkiliKisi: "",
   yetkiliTelefon: "",
-  yetkiliEmail: "",  odemeYapan: "",
+  yetkiliEmail: "",
+  odemeYapan: "",
   odemeYontemi: "",
   odemeDurumu: "",
   tutar: "",
@@ -189,8 +176,7 @@ export function RezervasyonForm({
         const reservation = await getReservationById(reservationId);
         console.log('Yüklenen rezervasyon:', reservation);
         if (reservation && reservation.id) {
-          setOriginalReservationId(reservation.id);
-          const newFormData = {
+          setOriginalReservationId(reservation.id);          const newFormData = {
             kaydOlusturan: reservation.kaydOlusturan || "",
             destinasyon: reservation.destinasyon || "",
             turSablonu: reservation.turSablonu || "",
@@ -199,11 +185,6 @@ export function RezervasyonForm({
             alisSaati: reservation.alisSaati || "",
             musteriAdiSoyadi: reservation.musteriAdiSoyadi || "",
             telefon: reservation.telefon || "",
-            email: reservation.email || "",
-            adres: reservation.adres || "",
-            tcKimlikPasaport: reservation.tcKimlikPasaport || "",
-            vatandaslik: reservation.vatandaslik || "",
-            referansKaynagi: reservation.referansKaynagi || "",
             alisYeri: reservation.alisYeri || "",
             alisDetaylari: reservation.alisDetaylari || {},
             firma: reservation.firma || "",
@@ -283,8 +264,7 @@ export function RezervasyonForm({
     if (editData && isEditMode) {
       console.log('editData ile form dolduruluyor...');
       setLoading(true);
-      
-      const newFormData = {
+        const newFormData = {
         kaydOlusturan: editData.kaydOlusturan || "",
         destinasyon: editData.destinasyon || "",
         turSablonu: editData.turSablonu || "",
@@ -293,11 +273,6 @@ export function RezervasyonForm({
         alisSaati: editData.alisSaati || "",
         musteriAdiSoyadi: editData.musteriAdiSoyadi || "",
         telefon: editData.telefon || "",
-        email: editData.email || "",
-        adres: editData.adres || "",
-        tcKimlikPasaport: editData.tcKimlikPasaport || "",
-        vatandaslik: editData.vatandaslik || "",
-        referansKaynagi: editData.referansKaynagi || "",
         alisYeri: editData.alisYeri || "",
         alisDetaylari: editData.alisDetaylari || {},
         firma: editData.firma || "",
@@ -540,7 +515,7 @@ export function RezervasyonForm({
     if (!allowedKeys.includes(e.key) && !/[0-9]/.test(e.key)) {
       e.preventDefault()
     }
-  }  // Alış detay alanları fonksiyonu - rezervasyon-sistemi klasöründen alınan yapı
+  }  // Alış detay alanları fonksiyonu - Acenta hariç tümü manuel input
   const getAlisDetayAlanlari = () => {
     switch (formData.alisYeri) {
       case "Otel":
@@ -556,10 +531,9 @@ export function RezervasyonForm({
       default:
         return ["Adres", "Alış Saati", "İletişim", "Özel Talimatlar"]
     }
-  }
-  // Hangi alanların firma seçimi olduğunu belirleme
+  }// Hangi alanların firma seçimi olduğunu belirleme - sadece Acenta Adı dinamik
   const isFirmaSecimAlani = (alan: string): boolean => {
-    return ["Otel Adı", "Acenta Adı", "Buluşma Yeri"].includes(alan)
+    return ["Acenta Adı"].includes(alan)
   }
 
   // Seçilen firmaya göre ilgili alanları otomatik doldur
@@ -599,32 +573,18 @@ export function RezervasyonForm({
       handleInputChange("yetkiliTelefon", "")
       handleInputChange("yetkiliEmail", "")
     }
-  }
-  // Alış yeri türüne göre firma kategorisi eşleştirmesi
+  }  // Alış yeri türüne göre firma kategorisi eşleştirmesi - sadece Acenta için
   const getAlisYeriKategorisi = (alisYeri: string): string => {
     switch (alisYeri) {
-      case "Otel":
-        return "Otel"
       case "Acenta":
         return "Acenta"
-      case "Havalimanı":
-        return "Ulaşım"
-      case "Restaurant":
-        return "Restaurant"
-      case "Müze":
-        return "Müze"
-      case "Aktivite":
-        return "Aktivite Sağlayıcısı"
-      case "Buluşma Noktası":
-        return "Hizmet Sağlayıcısı"
       default:
-        return "Hizmet Sağlayıcısı"
+        return "" // Diğer kategoriler için firma filtrelemesi yapma
     }
   }
-
-  // Alış yerine göre firmaları filtrele
+  // Alış yerine göre firmaları filtrele - sadece Acenta için
   const filterFirmasByAlisYeri = async (alisYeri: string) => {
-    if (!alisYeri) {
+    if (!alisYeri || alisYeri !== "Acenta") {
       setFilteredFirmalar([]);
       return;
     }
@@ -633,16 +593,18 @@ export function RezervasyonForm({
       const companies = await getCompanies();
       const kategori = getAlisYeriKategorisi(alisYeri);
       
-      // İlgili kategorideki firmaları filtrele
-      const filtered = companies.filter((company: any) => 
-        company.category === kategori || 
-        // Eğer kategori yoksa ve alış yeri "Otel" ise, isminde "otel" geçen firmaları getir
-        (!company.category && alisYeri === "Otel" && company.name.toLowerCase().includes("otel")) ||
-        // Eğer kategori yoksa ve alış yeri "Acenta" ise, isminde "acenta" geçen firmaları getir
-        (!company.category && alisYeri === "Acenta" && company.name.toLowerCase().includes("acenta"))
-      );
-      
-      setFilteredFirmalar(filtered);
+      if (kategori) {
+        // Sadece Acenta kategorisindeki firmaları filtrele
+        const filtered = companies.filter((company: any) => 
+          company.category === kategori || 
+          // Eğer kategori yoksa ve alış yeri "Acenta" ise, isminde "acenta" geçen firmaları getir
+          (!company.category && company.name.toLowerCase().includes("acenta"))
+        );
+        
+        setFilteredFirmalar(filtered);
+      } else {
+        setFilteredFirmalar([]);
+      }
     } catch (error) {
       console.error('Firmalar filtrelenirken hata:', error);
       setFilteredFirmalar([]);
@@ -686,7 +648,7 @@ export function RezervasyonForm({
       alisDetaylari: { ...prev.alisDetaylari, [field]: value },
     }))
   }
-
+  // Katılımcı fonksiyonlarını temizle - artık sadece temel alanlar var
   const addKatilimci = () => {
     const totalParticipants = 
       (parseInt(formData.yetiskinSayisi, 10) || 0) + 
@@ -705,13 +667,10 @@ export function RezervasyonForm({
       id: Date.now(),
       ad: "",
       soyad: "",
-      telefon: "",
-      email: "",
-      tcKimlik: "",
-      ulke: "",
     }
     setKatilimcilar([...katilimcilar, newKatilimci])
   }
+
   const removeKatilimci = (id: number) => {
     setKatilimcilar(katilimcilar.filter((k) => k.id !== id))
   }
@@ -720,16 +679,10 @@ export function RezervasyonForm({
     setKatilimcilar(prev => 
       prev.map(k => {
         if (k.id !== id) return k;
-        
-        // Telefon formatlaması
-        if (field === "telefon") {
-          return { ...k, [field]: formatPhoneNumber(value) };
-        }
-        
         return { ...k, [field]: value };
       })
     );
-  }  // Form validation
+  }// Form validation
   const isStepValid = (step: number): boolean => {
     switch (step) {
       case 1:
@@ -896,7 +849,7 @@ export function RezervasyonForm({
       console.log('onCancel callback çağırılıyor - ana sayfaya dönülüyor');
       onCancel();
     } else {      console.log('Hiçbir callback bulunamadı - formu sıfırlıyorum');      
-      // Fallback: Eğer callback yoksa formu sıfırla
+      // Fallback: Eğer callback yoksa formu sıfla
       setFormData(getInitialFormData());
       setCurrentStep(1);
       setTarih(undefined);
@@ -1154,197 +1107,39 @@ export function RezervasyonForm({
                     />                  </div>
                 </div>
               </div>
-            )}{/* Step 2: Müşteri Bilgileri */}
+            )}            {/* Step 2: Müşteri & Alış Bilgileri */}
             {currentStep === 2 && (
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div className="space-y-2">
-                    <Label htmlFor="musteriAdiSoyadi">Müşteri Adı Soyadı <span className="text-red-500">*</span></Label>
-                    <Input
-                      id="musteriAdiSoyadi"
-                      value={formData.musteriAdiSoyadi}
-                      onChange={(e) => handleInputChange("musteriAdiSoyadi", e.target.value)}
-                      placeholder="Müşteri adını girin"
-                      className={!formData.musteriAdiSoyadi ? "border-red-300" : ""}
-                    />
-                  </div>                  <div className="space-y-2">
-                    <Label htmlFor="telefon">Telefon <span className="text-red-500">*</span></Label>
-                    <Input
-                      id="telefon"                      value={formData.telefon}
-                      onChange={(e) => handleInputChange("telefon", e.target.value)}
-                      onKeyPress={handlePhoneKeyPress}
-                      placeholder="+90 532 456 12 45"
-                      className={!formData.telefon ? "border-red-300" : ""}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="email">E-posta</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={formData.email}
-                      onChange={(e) => handleInputChange("email", e.target.value)}
-                      placeholder="E-posta adresi"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="tcKimlikPasaport">T.C. Kimlik / Pasaport No</Label>
-                    <Input
-                      id="tcKimlikPasaport"
-                      value={formData.tcKimlikPasaport}
-                      onChange={(e) => handleInputChange("tcKimlikPasaport", e.target.value)}
-                      placeholder="Kimlik numarası"
-                    />
-                  </div>
-                  <div className="space-y-2 md:col-span-2">
-                    <Label htmlFor="adres">Adres</Label>
-                    <Textarea
-                      id="adres"
-                      value={formData.adres}
-                      onChange={(e) => handleInputChange("adres", e.target.value)}
-                      placeholder="Adres bilgisi"
-                      rows={3}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="vatandaslik">Vatandaşlık / Ülke</Label>
-                    <Select
-                      value={formData.vatandaslik}
-                      onValueChange={(value) => handleInputChange("vatandaslik", value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Ülke seçin" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {ornekUlkeler.map((ulke) => (
-                          <SelectItem key={ulke} value={ulke}>
-                            {ulke}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="referansKaynagi">Müşteri Referans Kaynağı</Label>
-                    <Select
-                      value={formData.referansKaynagi}
-                      onValueChange={(value) => handleInputChange("referansKaynagi", value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Müşteriyi nereden bulduk?" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {ornekFirmalar.map((kaynak) => (
-                          <SelectItem key={kaynak} value={kaynak}>
-                            {kaynak}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <h4 className="text-md font-semibold pt-4">Ek Katılımcılar</h4>
-                <div className="space-y-2 md:col-span-2 mt-2">
-                  <div className="flex justify-between items-center">
-                    <Label className="text-base">Ek Katılımcılar</Label>
-                    <Button type="button" variant="outline" size="sm" onClick={addKatilimci}>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Katılımcı Ekle
-                    </Button>
-                  </div>
-
-                  {katilimcilar.length === 0 ? (
-                    <div className="text-center py-4 text-muted-foreground border rounded-md">
-                      Henüz ek katılımcı eklenmemiş
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {katilimcilar.map((katilimci, index) => (
-                        <Card key={katilimci.id} className="p-4">
-                          <div className="flex justify-between items-start mb-2">
-                            <h4 className="font-medium">Katılımcı {index + 1}</h4>                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => removeKatilimci(katilimci.id)}
-                            >
-                              <Trash2 className="h-4 w-4 text-red-500" />
-                            </Button>
-                          </div>
-
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div className="space-y-2">
-                              <Label>Ad Soyad</Label>
-                              <Input
-                                value={`${katilimci.ad} ${katilimci.soyad}`.trim()}
-                                onChange={(e) => {
-                                  const fullName = e.target.value
-                                  const nameParts = fullName.split(' ')
-                                  const firstName = nameParts[0] || ''
-                                  const lastName = nameParts.slice(1).join(' ') || ''
-                                  updateKatilimci(katilimci.id, "ad", firstName)
-                                  updateKatilimci(katilimci.id, "soyad", lastName)
-                                }}
-                                placeholder="Ad soyad"
-                              />
-                            </div>                              <div className="space-y-2">
-                              <Label>Telefon</Label>
-                              <Input
-                                value={katilimci.telefon}
-                                onChange={(e) => updateKatilimci(katilimci.id, "telefon", e.target.value)}
-                                onKeyPress={handlePhoneKeyPress}
-                                placeholder="+90 532 456 12 45"
-                              />
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label>T.C. Kimlik / Pasaport No</Label>
-                              <Input
-                                value={katilimci.tcKimlik}
-                                onChange={(e) => updateKatilimci(katilimci.id, "tcKimlik", e.target.value)}
-                                placeholder="Kimlik numarası"
-                              />
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label>E-posta</Label>
-                              <Input
-                                value={katilimci.email}
-                                onChange={(e) => updateKatilimci(katilimci.id, "email", e.target.value)}
-                                placeholder="E-posta adresi"
-                              />
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label>Vatandaşlık / Ülke</Label>
-                              <Select
-                                value={katilimci.ulke}
-                                onValueChange={(value) => updateKatilimci(katilimci.id, "ulke", value)}
-                              >
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Ülke seçin" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {ornekUlkeler.map((ulke) => (
-                                    <SelectItem key={ulke} value={ulke}>
-                                      {ulke}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          </div>
-                        </Card>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}            {/* Step 3: Alış Yeri & Aracı */}
-            {currentStep === 3 && (
               <div className="space-y-6">
-                {/* Alış Yeri Bölümü */}
+                {/* Müşteri Bilgileri Bölümü */}
                 <div>
+                  <h3 className="text-lg font-medium mb-4 text-[#00a1c6]">Müşteri Bilgileri</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="musteriAdiSoyadi">Müşteri Adı Soyadı <span className="text-red-500">*</span></Label>
+                      <Input
+                        id="musteriAdiSoyadi"
+                        value={formData.musteriAdiSoyadi}
+                        onChange={(e) => handleInputChange("musteriAdiSoyadi", e.target.value)}
+                        placeholder="Müşteri adını girin"
+                        className={!formData.musteriAdiSoyadi ? "border-red-300" : ""}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="telefon">Telefon <span className="text-red-500">*</span></Label>
+                      <Input
+                        id="telefon"
+                        value={formData.telefon}
+                        onChange={(e) => handleInputChange("telefon", e.target.value)}
+                        onKeyPress={handlePhoneKeyPress}
+                        placeholder="+90 532 456 12 45"
+                        className={!formData.telefon ? "border-red-300" : ""}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Müşteriyi Alacağım Yer Bölümü */}
+                <div className="border-t pt-6">
                   <h3 className="text-lg font-medium mb-4 text-[#00a1c6]">Müşteriyi Alacağım Yer</h3>
                   <div className="space-y-4">
                     <div className="space-y-2">
@@ -1364,7 +1159,9 @@ export function RezervasyonForm({
                           ))}
                         </SelectContent>
                       </Select>
-                    </div>                    {/* Dinamik Alış Detayları - Sadece alış yeri seçildiğinde göster */}
+                    </div>
+
+                    {/* Dinamik Alış Detayları - Sadece alış yeri seçildiğinde göster */}
                     {formData.alisYeri && 
                      formData.alisYeri.trim() !== "" && 
                      formData.alisYeri !== "default" && 
@@ -1372,7 +1169,9 @@ export function RezervasyonForm({
                       <div className="mt-4 p-4 bg-gray-50 rounded-lg border transition-all duration-300 ease-in-out">
                         <h4 className="text-md font-medium mb-3 text-gray-700">
                           {formData.alisYeri} için Detay Bilgileri
-                        </h4>                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">                          {getAlisDetayAlanlari().map((alan) => (
+                        </h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {getAlisDetayAlanlari().map((alan) => (
                             <div key={alan} className="space-y-2">
                               <Label>{alan}</Label>
                               {alan === "Alış Saati" || alan === "Varış Saati" ? (
@@ -1384,7 +1183,8 @@ export function RezervasyonForm({
                                     onChange={(e) => handleAlisDetayChange(alan, e.target.value)}
                                     className="pr-10"
                                   />
-                                </div>                              ) : isFirmaSecimAlani(alan) ? (
+                                </div>
+                              ) : isFirmaSecimAlani(alan) ? (
                                 <Select
                                   value={formData.alisDetaylari[alan] || ""}
                                   onValueChange={(value) => handleFirmaSecimi(alan, value)}
@@ -1429,7 +1229,8 @@ export function RezervasyonForm({
                 {/* Aracı Bilgileri Bölümü */}
                 <div className="border-t pt-6">
                   <h3 className="text-lg font-medium mb-4 text-[#00a1c6]">Aracı Bilgileri</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">                    <div className="space-y-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
                       <Label htmlFor="firma">
                         Aracı Firma
                         <span className="text-sm text-gray-500 ml-2">
@@ -1443,7 +1244,8 @@ export function RezervasyonForm({
                         <SelectTrigger>
                           <SelectValue placeholder="Aracı firma seçin" />
                         </SelectTrigger>
-                        <SelectContent>                          {allFirmalar.length > 0 ? (
+                        <SelectContent>
+                          {allFirmalar.length > 0 ? (
                             allFirmalar.map((firma) => (
                               <SelectItem key={firma.id} value={firma.name}>
                                 <div className="flex items-center space-x-2 truncate">
@@ -1462,8 +1264,11 @@ export function RezervasyonForm({
                               Hiç firma bulunamadı
                             </SelectItem>
                           )}
-                        </SelectContent>                      </Select>
-                    </div><div className="space-y-2">
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
                       <Label htmlFor="yetkiliKisi">Yetkili Kişi</Label>
                       <Input
                         id="yetkiliKisi"
@@ -1497,8 +1302,8 @@ export function RezervasyonForm({
                   </div>
                 </div>
               </div>
-            )}            {/* Step 4: Ödeme */}
-            {currentStep === 4 && (
+            )}            {/* Step 3: Ödeme */}
+            {currentStep === 3 && (
               <div className="space-y-4">
                 {/* Ödeme Yapan ve Ödeme Durumu */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1685,26 +1490,22 @@ export function RezervasyonForm({
                   </div>
                 </div>
               </div>
-            )}
-
-            {/* Step 5: Ek Bilgiler */}
-            {currentStep === 5 && (
-              <div className="space-y-4">                
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="notlar">Notlar</Label>
-                    <Textarea
-                      id="notlar"
-                      value={formData.notlar}
-                      onChange={(e) => handleInputChange("notlar", e.target.value)}
-                      placeholder="Rezervasyon ile ilgili notlar"
-                      rows={4}
-                    />
-                  </div>
+            )}            {/* Step 4: Ek Bilgiler */}
+            {currentStep === 4 && (
+              <div className="space-y-1">
+                <div className="space-y-1">
+                  <Textarea
+                    id="notlar"
+                    value={formData.notlar}
+                    onChange={(e) => handleInputChange("notlar", e.target.value)}
+                    placeholder="Rezervasyon ile ilgili notlar"
+                    rows={2}
+                    className="py-0 my-0 min-h-[24px] leading-tight text-[13px] resize-none"
+                  />
                 </div>
               </div>
-            )}            {/* Step 6: Özet */}
-            {currentStep === 6 && (
+            )}            {/* Step 5: Özet */}
+            {currentStep === 5 && (
               <div className="space-y-4">
                 {/* 1. Rezervasyon Bilgileri */}
                 <Card>
@@ -1736,17 +1537,11 @@ export function RezervasyonForm({
                 <Card>
                   <CardHeader className="pb-2 pt-2">
                     <CardTitle className="text-[#00a1c6]">Müşteri Bilgileri</CardTitle>
-                  </CardHeader>
-                  <CardContent className="pt-2 pb-2">
+                  </CardHeader>                  <CardContent className="pt-2 pb-2">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-1">
                         <div><span className="font-medium">Ad Soyad:</span> {formData.musteriAdiSoyadi}</div>
                         <div><span className="font-medium">Telefon:</span> {formData.telefon}</div>
-                        <div><span className="font-medium">E-posta:</span> {formData.email || "-"}</div>
-                      </div>                      <div className="space-y-1">
-                        <div><span className="font-medium">T.C./Pasaport No:</span> {formData.tcKimlikPasaport || "-"}</div>
-                        <div><span className="font-medium">Adres:</span> {formData.adres || "-"}</div>
-                        <div><span className="font-medium">Uyruk:</span> {formData.vatandaslik || "-"}</div>
                       </div>
                     </div>
                   </CardContent>
@@ -1758,13 +1553,11 @@ export function RezervasyonForm({
                     <CardHeader className="pb-2 pt-2">
                       <CardTitle className="text-[#00a1c6]">Katılımcılar ({katilimcilar.length})</CardTitle>
                     </CardHeader>
-                    <CardContent className="pt-2 pb-2">
-                      <div className="space-y-2">
+                    <CardContent className="pt-2 pb-2">                      <div className="space-y-2">
                         {katilimcilar.map((katilimci, index) => (
-                          <div key={index} className="border rounded p-2 bg-gray-50">                            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm">
-                              <div><span className="font-medium">Ad Soyad:</span> {katilimci.ad} {katilimci.soyad}</div>
-                              <div><span className="font-medium">Ülke:</span> {katilimci.ulke}</div>
-                              <div><span className="font-medium">T.C./Pasaport:</span> {katilimci.tcKimlik || "-"}</div>
+                          <div key={index} className="border rounded p-2 bg-gray-50">
+                            <div className="text-sm">
+                              <span className="font-medium">Katılımcı {index + 1}:</span> {katilimci.ad} {katilimci.soyad}
                             </div>
                           </div>
                         ))}
