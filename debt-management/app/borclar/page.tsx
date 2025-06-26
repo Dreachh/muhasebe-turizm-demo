@@ -7,8 +7,8 @@ export default function BorclarPage() {
   return (
     <div className="container mx-auto py-6 px-4">
       <PageHeader
-        title="Tedarikçi Borç Yönetimi"
-        description="Tedarikçilere olan borçlarınızı ve ödemelerinizi takip edin"
+        title="Tedarikçi Cari Yönetimi"
+        description="Tedarikçilere olan carilerinizi ve ödemelerinizi takip edin"
       />
       <Suspense fallback={<Skeleton className="h-[600px] w-full" />}>
         <BorclarDashboard />

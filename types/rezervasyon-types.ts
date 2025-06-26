@@ -15,6 +15,7 @@ export interface Rezervasyon {
   turTarihi: string | number | Date;
   kaydOlusturan: string;
   destinasyon: string;
+  destinationName?: string; // getReservations fonksiyonundan gelen destinasyon ismi
   turSablonu: string;
   yetiskinSayisi: string | number;
   cocukSayisi: string | number;

@@ -37,6 +37,12 @@ import {
   getNextSerialNumber,
   updateSerialSettings,
 } from "@/lib/db"
+import {
+  getReservationDestinations,
+  addReservationDestination,
+  updateReservationDestination,
+  deleteReservationDestination,
+} from "@/lib/db-firebase"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
   Select,
@@ -247,7 +253,6 @@ export function SettingsView({
   const [isEditingActivity, setIsEditingActivity] = useState(false)
   const [isDeleteActivityDialogOpen, setIsDeleteActivityDialogOpen] = useState(false)
   const [activityToDelete, setActivityToDelete] = useState<Activity | null>(null)
-
   // Destinasyonlar için state
   const [destinations, setDestinations] = useState<Destination[]>([])
   const [newDestination, setNewDestination] = useState<Destination>({
@@ -261,6 +266,16 @@ export function SettingsView({
   const [isEditingDestination, setIsEditingDestination] = useState(false)
   const [isDeleteDestinationDialogOpen, setIsDeleteDestinationDialogOpen] = useState(false)
   const [destinationToDelete, setDestinationToDelete] = useState<Destination | null>(null)
+
+  // Rezervasyon Destinasyonları için state
+  const [reservationDestinations, setReservationDestinations] = useState<any[]>([])
+  const [newReservationDestination, setNewReservationDestination] = useState({
+    id: "",
+    name: "",
+    description: "",
+  })
+  const [isReservationDestinationDialogOpen, setIsReservationDestinationDialogOpen] = useState(false)
+  const [isEditingReservationDestination, setIsEditingReservationDestination] = useState(false)
   // Tur şablonları için state
   const [tourTemplates, setTourTemplates] = useState<Tour[]>([])
   const [newTourTemplate, setNewTourTemplate] = useState<Tour>({
@@ -623,9 +638,18 @@ export function SettingsView({
           ];
           setDestinations(exampleDestinations);
           await saveDestinations(exampleDestinations);
-        }
-      } catch (error) {
+        }      } catch (error) {
         console.error("Destinasyonlar yüklenirken hata:", error)
+      }
+    }
+
+    // Rezervasyon destinasyonlarını yükle
+    const loadReservationDestinations = async () => {
+      try {
+        const reservationDestinationsData = await getReservationDestinations()
+        setReservationDestinations(reservationDestinationsData)
+      } catch (error) {
+        console.error("Rezervasyon destinasyonları yüklenirken hata:", error)
       }
     }
 
@@ -739,13 +763,15 @@ export function SettingsView({
             }
           }
         }
-      }
-    };    loadSettings()
+      }    };
+
+    loadSettings()
     loadProviders()
     loadActivities()
     loadDestinations()
     loadTourTemplates()
     loadReservationSettings()
+    loadReservationDestinations()
   }, [])
   
   // Rezervasyon ayarlarını yükle
@@ -2283,7 +2309,87 @@ export function SettingsView({
                       className="w-full bg-[#00a1c6] hover:bg-[#008bb3]"
                     >
                       Ayarları Kaydet
+                    </Button>                  </div>
+                </CardContent>
+              </Card>              {/* Rezervasyon Destinasyonları */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <MapPin className="h-5 w-5" />
+                    Rezervasyon Destinasyonları
+                  </CardTitle>
+                  <CardDescription>
+                    Rezervasyon sisteminde kullanılacak destinasyonları yönetin
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <Button
+                      onClick={() => {
+                        setNewReservationDestination({
+                          id: generateUUID(),
+                          name: "",
+                          description: ""
+                        })
+                        setIsEditingReservationDestination(false)
+                        setIsReservationDestinationDialogOpen(true)
+                      }}
+                      className="w-full bg-[#00a1c6] hover:bg-[#008bb3]"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Yeni Rezervasyon Destinasyonu Ekle
                     </Button>
+                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                      {reservationDestinations.map((destination) => (
+                        <div key={destination.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                          <div>
+                            <div className="font-medium">{destination.name}</div>
+                            <div className="text-sm text-gray-500">{destination.description}</div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setNewReservationDestination(destination)
+                                setIsEditingReservationDestination(true)
+                                setIsReservationDestinationDialogOpen(true)
+                              }}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={async () => {
+                                try {
+                                  await deleteReservationDestination(destination.id)
+                                  setReservationDestinations(prev => prev.filter(d => d.id !== destination.id))
+                                  toast({
+                                    title: "Başarılı",
+                                    description: "Rezervasyon destinasyonu silindi.",
+                                  })
+                                } catch (error) {
+                                  console.error("Rezervasyon destinasyonu silinirken hata:", error)
+                                  toast({
+                                    title: "Hata",
+                                    description: "Rezervasyon destinasyonu silinirken bir hata oluştu.",
+                                    variant: "destructive",
+                                  })
+                                }
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                      {reservationDestinations.length === 0 && (
+                        <div className="text-center text-gray-500 py-4">
+                          Henüz rezervasyon destinasyonu eklenmemiş
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -2830,6 +2936,95 @@ export function SettingsView({
             </Button>
             <Button onClick={handleSavePaymentStatus} className="bg-[#00a1c6] hover:bg-[#008bb3]">
               {isEditingPaymentStatus ? "Güncelle" : "Ekle"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>      </Dialog>
+
+      {/* Rezervasyon Destinasyonu Ekleme/Düzenleme Dialog */}
+      <Dialog open={isReservationDestinationDialogOpen} onOpenChange={setIsReservationDestinationDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{isEditingReservationDestination ? "Rezervasyon Destinasyonunu Düzenle" : "Yeni Rezervasyon Destinasyonu Ekle"}</DialogTitle>
+            <DialogDescription>
+              Rezervasyonlarda kullanılacak destinasyon bilgilerini girin.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="destination-name">Destinasyon Adı <span className="text-red-500">*</span></Label>
+              <Input
+                id="destination-name"
+                value={newReservationDestination.name}
+                onChange={(e) => setNewReservationDestination(prev => ({ ...prev, name: e.target.value }))}
+                placeholder="Örn. Antalya, İstanbul, Kapadokya"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="destination-description">Açıklama</Label>
+              <Textarea
+                id="destination-description"
+                value={newReservationDestination.description}
+                onChange={(e) => setNewReservationDestination(prev => ({ ...prev, description: e.target.value }))}
+                placeholder="Destinasyon hakkında kısa açıklama"
+                rows={3}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsReservationDestinationDialogOpen(false)}>
+              İptal
+            </Button>
+            <Button 
+              onClick={async () => {
+                try {
+                  if (!newReservationDestination.name.trim()) {
+                    toast({
+                      title: "Hata",
+                      description: "Destinasyon adı gereklidir.",
+                      variant: "destructive",
+                    })
+                    return
+                  }
+
+                  if (isEditingReservationDestination) {
+                    await updateReservationDestination(newReservationDestination.id, {
+                      name: newReservationDestination.name,
+                      description: newReservationDestination.description
+                    })
+                    setReservationDestinations(prev => 
+                      prev.map(d => d.id === newReservationDestination.id ? newReservationDestination : d)
+                    )
+                    toast({
+                      title: "Başarılı",
+                      description: "Rezervasyon destinasyonu güncellendi.",
+                    })
+                  } else {
+                    const id = await addReservationDestination({
+                      name: newReservationDestination.name,
+                      description: newReservationDestination.description
+                    })
+                    setReservationDestinations(prev => [...prev, { ...newReservationDestination, id }])
+                    toast({
+                      title: "Başarılı",
+                      description: "Rezervasyon destinasyonu eklendi.",
+                    })
+                  }
+                  setIsReservationDestinationDialogOpen(false)
+                } catch (error) {
+                  console.error("Rezervasyon destinasyonu kaydedilirken hata:", error)
+                  toast({
+                    title: "Hata",
+                    description: "Rezervasyon destinasyonu kaydedilirken bir hata oluştu.",
+                    variant: "destructive",
+                  })
+                }
+              }}
+              className="bg-[#00a1c6] hover:bg-[#008bb3]"
+            >
+              {isEditingReservationDestination ? "Güncelle" : "Ekle"}
             </Button>
           </DialogFooter>
         </DialogContent>

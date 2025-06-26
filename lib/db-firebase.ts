@@ -26,8 +26,7 @@ import { getDb } from "./firebase-client-module";
 import { getDatabase, ref, set, get } from "firebase/database";
 
 // IndexedDB'deki STORES koleksiyonuna karşılık gelen koleksiyonlar
-export const COLLECTIONS = {
-  // Ana veri koleksiyonları
+export const COLLECTIONS = {  // Ana veri koleksiyonları
   tours: "tours", 
   financials: "financials",
   customers: "customers",
@@ -36,6 +35,7 @@ export const COLLECTIONS = {
   providers: "providers",
   activities: "activities",
   destinations: "destinations",
+  reservationDestinations: "reservationDestinations",
   
   // Borç ve ödeme yönetimi
   DEBTS: "debts", 
@@ -702,15 +702,12 @@ export async function getSessionVersion() {
 // Oturum versiyonunu arttır - tüm aktif oturumları geçersiz kılar
 export async function incrementSessionVersion() {
   try {
-    // Firestore instance'ını al
     const firestore = getDb();
     if (!firestore) {
       throw new Error("Firestore instance'ına erişilemedi");
     }
-    
     const docRef = doc(firestore, "admin", "session_config");
     const docSnap = await getDoc(docRef);
-    
     if (docSnap.exists()) {
       const currentVersion = docSnap.data().version || 1;
       await updateDoc(docRef, {
@@ -719,14 +716,14 @@ export async function incrementSessionVersion() {
       });
       return { success: true, newVersion: currentVersion + 1 };
     } else {
-      // Kayıt yoksa oluştur
       await setDoc(docRef, {
-        version: 2, // İlk sıfırlamada 2'ye ayarla
+        version: 2,
         lastReset: serverTimestamp(),
         createdAt: serverTimestamp(),
       });
       return { success: true, newVersion: 2 };
-    }  } catch (error) {
+    }
+  } catch (error) {
     console.error("Oturum sıfırlama hatası:", error);
     return { success: false, error };
   }
@@ -745,10 +742,20 @@ export async function getReservations(): Promise<any[]> {
 
     const q = query(collection(firestore, COLLECTIONS.reservations), orderBy('createdAt', 'desc'));
     const querySnapshot = await getDocs(q);
-    const reservations = querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
+    
+    // Destinasyonları bir kere al
+    const destinations = await getReservationDestinations();
+    const destinationMap = new Map(destinations.map(d => [d.id, d.name]));
+
+    const reservations = querySnapshot.docs.map(doc => {
+      const reservationData = doc.data();
+      const destinationName = destinationMap.get(reservationData.destinationId) || "Bilinmeyen";
+      return {
+        id: doc.id,
+        ...reservationData,
+        destinationName: destinationName, // Destinasyon adını ekle
+      };
+    });
 
     return reservations;
   } catch (error) {
@@ -1315,3 +1322,115 @@ export function getUpcomingReservations(reservations: any[]): any[] {
 }
 
 // ==================== REZERVASYON SİSTEMİ FONKSİYONLARI ====================
+
+// ==================== REZERVASYON DESTİNASYONLARI FONKSİYONLARI ====================
+
+export interface ReservationDestination {
+  id: string;
+  name: string;
+  description: string;
+  createdAt?: any;
+  updatedAt?: any;
+}
+
+// Rezervasyon destinasyonlarını getir
+export async function getReservationDestinations(): Promise<ReservationDestination[]> {
+  try {
+    const db = getDb();
+    if (!db) {
+      throw new Error("Firestore bağlantısı kurulamadı");
+    }
+
+    const querySnapshot = await getDocs(collection(db, COLLECTIONS.reservationDestinations));
+    const destinations: ReservationDestination[] = [];
+    
+    querySnapshot.forEach((doc) => {
+      destinations.push({ id: doc.id, ...doc.data() } as ReservationDestination);
+    });
+    
+    return destinations.sort((a, b) => a.name.localeCompare(b.name));
+  } catch (error) {
+    console.error("Rezervasyon destinasyonları getirilirken hata:", error);
+    return [];
+  }
+}
+
+// Rezervasyon destinasyonu ekle
+export async function addReservationDestination(destination: Omit<ReservationDestination, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
+  try {
+    const db = getDb();
+    if (!db) {
+      throw new Error("Firestore bağlantısı kurulamadı");
+    }
+
+    const docRef = await addDoc(collection(db, COLLECTIONS.reservationDestinations), {
+      ...destination,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+    
+    return docRef.id;
+  } catch (error) {
+    console.error("Rezervasyon destinasyonu eklenirken hata:", error);
+    throw error;
+  }
+}
+
+// Rezervasyon destinasyonu güncelle
+export async function updateReservationDestination(id: string, destination: Partial<Omit<ReservationDestination, 'id' | 'createdAt'>>): Promise<void> {
+  try {
+    const db = getDb();
+    if (!db) {
+      throw new Error("Firestore bağlantısı kurulamadı");
+    }
+
+    await updateDoc(doc(db, COLLECTIONS.reservationDestinations, id), {
+      ...destination,
+      updatedAt: serverTimestamp()
+    });
+  } catch (error) {
+    console.error("Rezervasyon destinasyonu güncellenirken hata:", error);
+    throw error;
+  }
+}
+
+// Rezervasyon destinasyonu sil
+export async function deleteReservationDestination(id: string): Promise<void> {
+  try {
+    const db = getDb();
+    if (!db) {
+      throw new Error("Firestore bağlantısı kurulamadı");
+    }
+
+    await deleteDoc(doc(db, COLLECTIONS.reservationDestinations, id));
+  } catch (error) {
+    console.error("Rezervasyon destinasyonu silinirken hata:", error);
+    throw error;
+  }
+}
+
+// Rezervasyon destinasyonlarını toplu kaydet
+export async function saveReservationDestinations(destinations: ReservationDestination[]): Promise<void> {
+  try {
+    const db = getDb();
+    if (!db) {
+      throw new Error("Firestore bağlantısı kurulamadı");
+    }
+
+    const batch = writeBatch(db);
+    
+    destinations.forEach((destination) => {
+      const docRef = doc(db, COLLECTIONS.reservationDestinations, destination.id);
+      batch.set(docRef, {
+        ...destination,
+        updatedAt: serverTimestamp()
+      });
+    });
+    
+    await batch.commit();
+  } catch (error) {
+    console.error("Rezervasyon destinasyonları kaydedilirken hata:", error);
+    throw error;
+  }
+}
+// ==================== REZERVASYON DESTİNASYONLARI FONKSİYONLARI ====================

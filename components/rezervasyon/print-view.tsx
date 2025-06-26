@@ -183,18 +183,17 @@ export default function PrintReservationsPage() {
               <span className="text-sm font-semibold">{destination}</span>
               <span className="ml-auto text-xs bg-gray-200 text-gray-800 rounded px-2 py-0.5">{reservations.length} Rezervasyon</span>
             </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full border-collapse print:w-full" style={{fontSize: '11px'}}>
+            <div className="overflow-x-auto">              <table className="min-w-full border-collapse print:w-full" style={{fontSize: '11px'}}>
                 <colgroup>
-                  <col style={{width: '55px'}} /> {/* TARİH */}
-                  <col style={{width: '150px'}} /> {/* FİRMA */}
-                  <col style={{width: '95px'}} /> {/* ÖDEME */}
-                  <col style={{width: '190px'}} /> {/* TUR ŞABLONU */}
-                  <col style={{width: '130px'}} /> {/* MÜŞTERİ */}
-                  <col style={{width: '120px'}} /> {/* İLETİŞİM */}
-                  <col style={{width: '55px'}} /> {/* K.SAYISI */}
-                  <col style={{width: '160px'}} /> {/* ALIŞ YERİ */}
-                  <col style={{width: '80px'}} /> {/* ALIŞ */}
+                  <col style={{width: '55px'}} />
+                  <col style={{width: '150px'}} />
+                  <col style={{width: '95px'}} />
+                  <col style={{width: '190px'}} />
+                  <col style={{width: '130px'}} />
+                  <col style={{width: '120px'}} />
+                  <col style={{width: '55px'}} />
+                  <col style={{width: '160px'}} />
+                  <col style={{width: '80px'}} />
                 </colgroup>
                 <thead>
                   <tr className="bg-gray-100 border-b-2 border-black h-2">

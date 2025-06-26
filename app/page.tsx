@@ -19,6 +19,7 @@ import DatabaseNavLinks from "../components/database-nav-links";
 const BorclarPage = dynamic(() => import("./borclar/page"), { ssr: false });
 import { exportData, importData } from "../lib/export-import"
 import { getAllData, addData, updateData, initializeDB, clearStore, deleteData, getReservations } from "../lib/db"
+import { getReservationDestinations } from "../lib/db-firebase"
 import { CustomerView } from "../components/customer-view"
 import { MainHeader } from "../components/main-header"
 import { Sidebar } from "../components/sidebar"
@@ -195,10 +196,10 @@ export default function Home() {  const [currentView, setCurrentView] = useState
     try {
       console.log("Firebase'den veriler yükleniyor...");
       
-      // Rezervasyon, destinasyon ve şablon verilerini paralel yükle
+      // Rezervasyon ve şablon verilerini paralel yükle
       const [reservations, destinations, templates] = await Promise.all([
         getReservations(),
-        getAllData('destinations'),
+        getAllData('reservationDestinations'), // getReservations zaten isimleri alıyor, bu saf veri için
         getAllData('tourTemplates')
       ]);
 
@@ -211,6 +212,10 @@ export default function Home() {  const [currentView, setCurrentView] = useState
         destinations: destinations.length,
         templates: templates.length
       });
+      
+      // Debug: Destinasyon verilerini logla
+      console.log("🔍 Destinations verisi:", destinations);
+      console.log("🔍 İlk rezervasyon örneği:", reservations[0]);
     } catch (error) {
       console.error("Veriler yüklenirken hata oluştu:", error);
       toast({
@@ -484,12 +489,21 @@ export default function Home() {  const [currentView, setCurrentView] = useState
   const handleReservationEditComplete = () => {
     setEditingReservation(null);
     setCurrentView("rezervasyon-liste");
-    // Rezervasyon listesi otomatik yenilenecek
+    // Rezervasyon verilerini yeniden yükle
+    loadReservations();
     toast({
       title: "Başarılı",
       description: "Rezervasyon başarıyla güncellendi!",
     });
   };
+
+  // Rezervasyon kaydedildiğinde (yeni veya güncelleme)
+  const handleReservationSave = async (data: any) => {
+    console.log('Rezervasyon kaydedildi, liste güncelleniyor...', data);
+    // Rezervasyon verilerini yeniden yükle
+    await loadReservations();
+  };
+
   return (
     <div className="flex min-h-screen">
       <Sidebar currentView={currentView} onNavigate={navigateTo} />
@@ -604,9 +618,6 @@ export default function Home() {  const [currentView, setCurrentView] = useState
                   handleDataUpdate("financial", updatedFinancials);
                 }
                 
-                // 3. Tur verilerinden müşteri borçlarını oluşturma mantığı buradan kaldırıldı.
-                // Bu işlem artık components/tour-sales-form.tsx içinde handleSubmit tarafından yönetiliyor.
-                
                 setEditingRecord(null);
               }}
               onCancel={() => { 
@@ -688,7 +699,8 @@ export default function Home() {  const [currentView, setCurrentView] = useState
               }}
               onClose={() => navigateTo("main-dashboard")}
             />
-          )}          {currentView === "calendar" && (
+          )}
+          {currentView === "calendar" && (
             <CalendarView
               toursData={toursData.map(tour => {
                 // Güvenli tip dönüşümü için
@@ -712,11 +724,17 @@ export default function Home() {  const [currentView, setCurrentView] = useState
                   serialNumber: tour.serialNumber
                 };
               })}
-              reservationsData={reservationsData.map(reservation => {                // Rezervasyon verilerini CalendarEvent formatına dönüştür
+              reservationsData={reservationsData.map(reservation => {
+                // Rezervasyon verilerini CalendarEvent formatına dönüştür
                 const reservationDate = new Date(reservation.turTarihi);
                 
                 // Destinasyon isimlerini çözümle
                 const getDestinationName = (destinationId: string) => {
+                  // Rezervasyonda destinationName varsa onu kullan
+                  if (reservation.destinationName) {
+                    return reservation.destinationName;
+                  }
+                  // Fallback: destinationsData'dan arama yap
                   const destination = destinationsData.find(d => d.id === destinationId);
                   return destination ? (destination.name || destination.title || destinationId) : destinationId;
                 };
@@ -740,7 +758,8 @@ export default function Home() {  const [currentView, setCurrentView] = useState
                   status: reservation.odemeDurumu,
                   destination: reservation.destinasyon,
                   agency: reservation.firma
-                };              })}
+                };
+              })}
               destinations={destinationsData}
               tourTemplates={tourTemplatesData}
               onNavigate={navigateTo}
@@ -798,20 +817,23 @@ export default function Home() {  const [currentView, setCurrentView] = useState
               onNavigate={navigateTo}
               onClose={() => navigateTo("main-dashboard")}
             />
-          )}          {currentView === "currency" && (
+          )}
+          {currentView === "currency" && (
             <CurrencyView onClose={() => setCurrentView("dashboard")} />
           )}
-            {/* Rezervasyon Sistemi */}
+          {/* Rezervasyon Sistemi */}
           {currentView === "rezervasyon-form" && (
             <RezervasyonForm
               mode={editingReservation ? 'edit' : 'create'}
               reservationId={editingReservation?.id}
               editData={editingReservation}
+              onSave={handleReservationSave}
               onNavigate={navigateTo}
               onCancel={() => navigateTo('rezervasyon-liste')}
               onEditComplete={handleReservationEditComplete}
             />
-          )}            {currentView === "rezervasyon-liste" && (
+          )}
+          {currentView === "rezervasyon-liste" && (
             <RezervasyonListe 
               reservationsData={reservationsData}
               destinations={destinationsData}
@@ -829,9 +851,11 @@ export default function Home() {  const [currentView, setCurrentView] = useState
           {/* Yeni eklenen bileşenler */}
           {currentView === "companies" && (
             <CompanyManagement />
-          )}{currentView === "debts" && (
+          )}
+          {currentView === "debts" && (
             <BorclarPage />
-          )}          {currentView === "payments" && (
+          )}
+          {currentView === "payments" && (
             <PaymentManagement />
           )}
           {currentView === "period-data" && (
@@ -845,4 +869,3 @@ export default function Home() {  const [currentView, setCurrentView] = useState
     </div>
   );
 }
-

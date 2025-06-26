@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
-import { CalendarIcon, Check, ChevronLeft, ChevronRight, Edit, Loader2, Plus, Save, Trash2, X, ChevronsUpDown } from "lucide-react"
+import { CalendarIcon, Check, ChevronLeft, ChevronRight, Edit, Loader2, Plus, Save, Trash2, X, ChevronsUpDown, Users } from "lucide-react"
 import { format } from "date-fns"
 import { tr } from "date-fns/locale"
 import { useToast } from "@/hooks/use-toast"
@@ -25,7 +25,7 @@ import {
   getReservationById,
   updateReservation
 } from "@/lib/db"
-import { getTourTemplatesByDestination, getDestinations } from "@/lib/db-firebase"
+import { getDestinations, getReservationDestinations } from "@/lib/db-firebase"
 
 // Katılımcı interface'i - Sadece gerekli alanları tut
 interface Katilimci {
@@ -49,7 +49,6 @@ interface RezervasyonFormProps {
 interface RezervasyonFormData {
   kaydOlusturan: string;
   destinasyon: string;
-  turSablonu: string;
   yetiskinSayisi: string;
   cocukSayisi: string;
   alisSaati: string;
@@ -85,7 +84,6 @@ const steps = [
 const getInitialFormData = (): RezervasyonFormData => ({
   kaydOlusturan: "",
   destinasyon: "",
-  turSablonu: "",
   yetiskinSayisi: "",
   cocukSayisi: "",
   alisSaati: "",
@@ -134,8 +132,7 @@ export function RezervasyonForm({
   const FORM_STORAGE_KEY = isEditMode ? 
     `reservation_form_edit_${reservationId}` : 
     'reservation_form_new';  // Dinamik veriler
-  const [destinasyonlar, setDestinasyonlar] = useState<any[]>([]); // ID ve ad ile destinasyonlar
-  const [turSablonlari, setTurSablonlari] = useState<any[]>([])
+  const [destinasyonlar, setDestinasyonlar] = useState<any[]>([]); // Rezervasyon destinasyonları
   const [ornekFirmalar, setOrnekFirmalar] = useState<string[]>([])
   const [allFirmalar, setAllFirmalar] = useState<any[]>([]) // Tüm firmalar (aracı firma için)
   const [filteredFirmalar, setFilteredFirmalar] = useState<any[]>([]) // Kategoriye göre filtrelenmiş firmalar
@@ -179,7 +176,6 @@ export function RezervasyonForm({
           setOriginalReservationId(reservation.id);          const newFormData = {
             kaydOlusturan: reservation.kaydOlusturan || "",
             destinasyon: reservation.destinasyon || "",
-            turSablonu: reservation.turSablonu || "",
             yetiskinSayisi: reservation.yetiskinSayisi || "",
             cocukSayisi: reservation.cocukSayisi || "",
             alisSaati: reservation.alisSaati || "",
@@ -263,11 +259,9 @@ export function RezervasyonForm({
     console.log('editData useEffect çalışıyor. Gelen editData:', editData ? 'Mevcut' : 'Yok');
     if (editData && isEditMode) {
       console.log('editData ile form dolduruluyor...');
-      setLoading(true);
-        const newFormData = {
+      setLoading(true);        const newFormData = {
         kaydOlusturan: editData.kaydOlusturan || "",
         destinasyon: editData.destinasyon || "",
-        turSablonu: editData.turSablonu || "",
         yetiskinSayisi: editData.yetiskinSayisi?.toString() || "0",
         cocukSayisi: editData.cocukSayisi?.toString() || "0",
         alisSaati: editData.alisSaati || "",
@@ -355,11 +349,9 @@ export function RezervasyonForm({
         
         // Import countries from static file (same as tour sales form)
         const { countries } = await import("@/lib/countries")
-        setOrnekUlkeler(countries.map((c: any) => c.name))
-
-        // Firebase'den veri çek - paralel olarak
+        setOrnekUlkeler(countries.map((c: any) => c.name))        // Firebase'den veri çek - paralel olarak
         const [destinations, companies, pickupTypes, paymentMethods, paymentStatuses] = await Promise.all([
-          getDestinations(), // Direkt getDestinations kullan
+          getReservationDestinations(), // Rezervasyon destinasyonlarını kullan
           getCompanies(), // getReservationSettings yerine getCompanies kullan
           getReservationSettings('pickupTypes'),
           getReservationSettings('paymentMethods'),
@@ -441,27 +433,8 @@ export function RezervasyonForm({
         saveFormToStorage();
       }, 500); // 500ms delay ile kaydet (daha hızlı)
 
-      return () => clearTimeout(timer);
-    }
+      return () => clearTimeout(timer);    }
   }, [formData, currentStep, turTarihi, katilimcilar, tarih, saveFormToStorage, isEditMode]);
-  // Tur şablonları destinasyon ID'ye göre dinamik olarak güncellensin
-  useEffect(() => {
-    const fetchTemplates = async () => {
-      if (formData.destinasyon) {
-        setTurSablonlari([])
-        try {
-          const { getTourTemplatesByDestination } = await import("@/lib/db-firebase")
-          const templates = await getTourTemplatesByDestination(formData.destinasyon)
-          setTurSablonlari(templates)
-        } catch (error) {
-          setTurSablonlari([])
-        }
-      } else {
-        setTurSablonlari([])
-      }
-    }
-    fetchTemplates()
-  }, [formData.destinasyon])
 
   // Alış yeri değiştiğinde firmaları filtrele
   useEffect(() => {
@@ -611,17 +584,14 @@ export function RezervasyonForm({
     }
   }
   // Handlers
-  const handleInputChange = (field: keyof RezervasyonFormData, value: string) => {
-    setFormData((prev) => {
+  const handleInputChange = (field: keyof RezervasyonFormData, value: string) => {    setFormData((prev) => {
       const updated = { ...prev, [field]: value };
       // Telefon formatlaması
       if (field === "telefon" || field === "yetkiliTelefon") {
         updated[field] = formatPhoneNumber(value);
       }
-      // Destinasyon değiştiğinde tur şablonunu sıfırla
-      if (field === "destinasyon") {
-        updated.turSablonu = "";
-      }      // Alış yeri değiştiğinde detayları sıfla ve firmaları filtrele
+      
+      // Alış yeri değiştiğinde detayları sıfla ve firmaları filtrele
       if (field === "alisYeri") {
         updated.alisDetaylari = {};
         updated.firma = ""; // Firma seçimini de sıfla
@@ -682,11 +652,11 @@ export function RezervasyonForm({
         return { ...k, [field]: value };
       })
     );
-  }// Form validation
+  }  // Form validation
   const isStepValid = (step: number): boolean => {
     switch (step) {
       case 1:
-        // Tur şablonu zorunlu değil!
+        // Destinasyon ve temel alanlar zorunlu
         return !!(turTarihi && formData.destinasyon && formData.kaydOlusturan)
       case 2:
         return !!(formData.musteriAdiSoyadi && formData.telefon)
@@ -798,19 +768,41 @@ export function RezervasyonForm({
           return; // Düzenleme modunda buradan çık
         }
 
-        // Sadece yeni kayıt modunda formu sıfırla
+        // Sadece yeni kayıt modunda formu sıfırla veya ana sayfaya yönlendir
         if (!isEditMode) {
-          console.log('Yeni kayıt modu - form sıfırlanıyor');
-          setFormData(getInitialFormData())
-          setKatilimcilar([])
+          console.log('Yeni kayıt modu - kullanıcı tercihi sorulacak');
+          
+          // Kullanıcıya seçenek sun: Yeni rezervasyon mu yoksa rezervasyon listesine dön mü?
+          const userChoice = confirm("Rezervasyon başarıyla kaydedildi! Yeni bir rezervasyon eklemek ister misiniz?\n\n'Tamam' = Yeni rezervasyon ekle\n'İptal' = Rezervasyon listesine dön");
+          
+          if (userChoice) {
+            // Yeni rezervasyon eklemek istiyor - formu sıfırla
+            console.log('Kullanıcı yeni rezervasyon ekleme seçti - form sıfırlanıyor');
+            setFormData(getInitialFormData())
+            setKatilimcilar([])
+            setCurrentStep(1)
+            setTarih(undefined)
+            setTurTarihi("")
+            setError(null)
 
-          // Yeni seri numarası al - artık sadece bir sonraki boş numarayı al (artırma işlemi zaten yapıldı)
-          try {
-            const newSerial = await getNextSerialNumber()
-            setSeriNumarasi(newSerial)
-          } catch (err) {
-            const randomNum = Math.floor(Math.random() * 1000000) + 1
-            setSeriNumarasi(`REZ-${randomNum.toString().padStart(6, "0")}`)
+            // Yeni seri numarası al
+            try {
+              const newSerial = await getNextSerialNumber()
+              setSeriNumarasi(newSerial)
+            } catch (err) {
+              const randomNum = Math.floor(Math.random() * 1000000) + 1
+              setSeriNumarasi(`REZ-${randomNum.toString().padStart(6, "0")}`)
+            }
+          } else {
+            // Ana sayfaya dönmek istiyor
+            console.log('Kullanıcı ana sayfaya dönme seçti');
+            if (onNavigate) {
+              console.log('onNavigate callback çağrılıyor - rezervasyon listesine yönlendiriliyor');
+              onNavigate("rezervasyon-liste");
+            } else if (onCancel) {
+              console.log('onCancel callback çağrılıyor');
+              onCancel();
+            }
           }
         }
 
@@ -886,12 +878,10 @@ export function RezervasyonForm({
     console.log('EditData useEffect çalışıyor:', { editData, isEditMode });
     if (editData && isEditMode) {
       console.log('EditData ile form dolduruluyor:', editData);
-      
-      // Form data'yı güncelle
+        // Form data'yı güncelle
       const newFormData = {
         kaydOlusturan: editData.kaydOlusturan || "",
         destinasyon: editData.destinasyon || "",
-        turSablonu: editData.turSablonu || "",
         yetiskinSayisi: editData.yetiskinSayisi || "",
         cocukSayisi: editData.cocukSayisi || "",
         alisSaati: editData.alisSaati || "",
@@ -1056,36 +1046,6 @@ export function RezervasyonForm({
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="turSablonu">Tur Şablonu</Label>
-                    <Select
-                      value={formData.turSablonu}
-                      onValueChange={(value) => handleInputChange("turSablonu", value)}
-                      disabled={!formData.destinasyon}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder={
-                          !formData.destinasyon
-                            ? "Önce destinasyon seçin"
-                            : turSablonlari.length === 0
-                              ? "Bu destinasyon için tur şablonu bulunamadı"
-                              : "Tur şablonu seçin"
-                        } />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {turSablonlari.length === 0 ? (
-                          <SelectItem value="no-templates" disabled>
-                            Bu destinasyon için tur şablonu bulunmuyor
-                          </SelectItem>                        ) : (
-                          turSablonlari.map((tur: any) => (
-                            <SelectItem key={tur.id} value={tur.id}>
-                              {tur.name || tur.title}
-                            </SelectItem>
-                          ))
-                        )}
-                      </SelectContent>
-                    </Select>
-                  </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="yetiskinSayisi">Yetişkin Sayısı</Label>
@@ -1096,7 +1056,7 @@ export function RezervasyonForm({
                       onChange={(e) => handleInputChange("yetiskinSayisi", e.target.value)}
                       placeholder="0"
                     />
-                  </div>                  <div className="space-y-2">
+                  </div><div className="space-y-2">
                     <Label htmlFor="cocukSayisi">Çocuk Sayısı</Label>
                     <Input
                       id="cocukSayisi"
@@ -1301,6 +1261,8 @@ export function RezervasyonForm({
                     </div>
                   </div>
                 </div>
+
+
               </div>
             )}            {/* Step 3: Ödeme */}
             {currentStep === 3 && (
@@ -1512,73 +1474,40 @@ export function RezervasyonForm({
                   <CardHeader className="pb-2 pt-2">
                     <CardTitle className="text-[#00a1c6]">Rezervasyon Bilgileri</CardTitle>
                   </CardHeader>                  <CardContent className="pt-2 pb-2">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div className="space-y-1">
                         <div><span className="font-medium">Seri No:</span> {seriNumarasi}</div>
                         <div><span className="font-medium">Tur Tarihi:</span> {turTarihi}</div>
+                      </div>
+                      <div className="space-y-1">
                         <div><span className="font-medium">Destinasyon:</span> {
                           destinasyonlar.find(dest => dest.id === formData.destinasyon)?.name || formData.destinasyon || "-"
                         }</div>
+                        <div><span className="font-medium">Katılımcı Sayısı:</span> {Number(formData.yetiskinSayisi || 0) + Number(formData.cocukSayisi || 0)} kişi</div>
                       </div>
                       <div className="space-y-1">
-                        <div><span className="font-medium">Tur Şablonu:</span> {
-                          turSablonlari.find(tur => tur.id === formData.turSablonu)?.name || 
-                          turSablonlari.find(tur => tur.id === formData.turSablonu)?.title || 
-                          "Seçilmedi"
-                        }</div>
-                        <div><span className="font-medium">Katılımcı Sayısı:</span> {katilimcilar.length}</div>
-                        <div><span className="font-medium">Toplam Tutar:</span> {formData.tutar} {formData.paraBirimi}</div>
+                        <div><span className="font-medium">Yetişkin:</span> {formData.yetiskinSayisi || 0}</div>
+                        <div><span className="font-medium">Çocuk:</span> {formData.cocukSayisi || 0}</div>
                       </div>
                     </div>
                   </CardContent>
                 </Card>
 
-                {/* 2. Müşteri Bilgileri */}
-                <Card>
-                  <CardHeader className="pb-2 pt-2">
-                    <CardTitle className="text-[#00a1c6]">Müşteri Bilgileri</CardTitle>
-                  </CardHeader>                  <CardContent className="pt-2 pb-2">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-1">
-                        <div><span className="font-medium">Ad Soyad:</span> {formData.musteriAdiSoyadi}</div>
-                        <div><span className="font-medium">Telefon:</span> {formData.telefon}</div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* 3. Katılımcılar */}
-                {katilimcilar.length > 0 && (
-                  <Card>
-                    <CardHeader className="pb-2 pt-2">
-                      <CardTitle className="text-[#00a1c6]">Katılımcılar ({katilimcilar.length})</CardTitle>
-                    </CardHeader>
-                    <CardContent className="pt-2 pb-2">                      <div className="space-y-2">
-                        {katilimcilar.map((katilimci, index) => (
-                          <div key={index} className="border rounded p-2 bg-gray-50">
-                            <div className="text-sm">
-                              <span className="font-medium">Katılımcı {index + 1}:</span> {katilimci.ad} {katilimci.soyad}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* 4. Alış Yeri & Aracı Bilgileri */}
+                {/* 2. Alış Yeri & Müşteri Bilgileri */}
                 {formData.alisYeri && (
                   <Card>
                     <CardHeader className="pb-2 pt-2">
-                      <CardTitle className="text-[#00a1c6]">Alış Yeri & Aracı Bilgileri</CardTitle>
+                      <CardTitle className="text-[#00a1c6]">Alış Yeri & Müşteri Bilgileri</CardTitle>
                     </CardHeader>
                     <CardContent className="pt-2 pb-2">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-1">
+                          <div><span className="font-medium">Ad Soyad:</span> {formData.musteriAdiSoyadi}</div>
+                          <div><span className="font-medium">Telefon:</span> {formData.telefon}</div>
                           <div><span className="font-medium">Alış Yeri:</span> {formData.alisYeri}</div>
-                          <div><span className="font-medium">Aracı Firma:</span> {formData.firma || "Belirtilmedi"}</div>
                         </div>
                         <div className="space-y-1">
+                          <div><span className="font-medium">Aracı Firma:</span> {formData.firma || "Belirtilmedi"}</div>
                           {formData.yetkiliKisi && (
                             <div><span className="font-medium">Yetkili:</span> {formData.yetkiliKisi}</div>
                           )}
@@ -1607,33 +1536,28 @@ export function RezervasyonForm({
                   </Card>
                 )}
 
-                {/* 5. Ödeme Bilgileri */}
+
+                {/* 3. Ödeme Bilgileri */}
                 <Card>
                   <CardHeader className="pb-2 pt-2">
                     <CardTitle className="text-[#00a1c6]">Ödeme Bilgileri</CardTitle>
-                  </CardHeader>                  <CardContent className="pt-2 pb-2">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  </CardHeader>
+                  <CardContent className="pt-2 pb-2">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div className="space-y-1">
                         <div><span className="font-medium">Ödeme Yapan:</span> {formData.odemeYapan || "-"}</div>
                         <div><span className="font-medium">Ödeme Durumu:</span> {formData.odemeDurumu || "-"}</div>
-                        {(formData.odemeDurumu === "Ödendi" || formData.odemeDurumu === "Kısmi Ödendi" || formData.odemeDurumu === "Tamamlandı") && (
-                          <div><span className="font-medium">Ödeme Yöntemi:</span> {formData.odemeYontemi || "-"}</div>
-                        )}
                       </div>
                       <div className="space-y-1">
                         {(formData.odemeDurumu === "Ödendi" || formData.odemeDurumu === "Kısmi Ödendi" || formData.odemeDurumu === "Tamamlandı") && (
-                          <>
-                            <div><span className="font-medium">Ödeme Tutarı:</span> {formData.tutar || "-"} {formData.paraBirimi}</div>
-                            {formData.odemeTarihi && (
-                              <div><span className="font-medium">Ödeme Tarihi:</span> {formData.odemeTarihi}</div>
-                            )}
-                          </>
+                          <div><span className="font-medium">Ödeme Yöntemi:</span> {formData.odemeYontemi || "-"}</div>
                         )}
-                        {!formData.odemeDurumu || (formData.odemeDurumu !== "Ödendi" && formData.odemeDurumu !== "Kısmi Ödendi" && formData.odemeDurumu !== "Tamamlandı") ? (
-                          formData.tutar && (
-                            <div><span className="font-medium">Toplam Tutar:</span> {formData.tutar} {formData.paraBirimi}</div>
-                          )
-                        ) : null}
+                        <div><span className="font-medium">Toplam Tutar:</span> {formData.tutar || "-"} {formData.paraBirimi}</div>
+                      </div>
+                      <div className="space-y-1">
+                        {(formData.odemeDurumu === "Ödendi" || formData.odemeDurumu === "Kısmi Ödendi" || formData.odemeDurumu === "Tamamlandı") && formData.odemeTarihi && (
+                          <div><span className="font-medium">Ödeme Tarihi:</span> {formData.odemeTarihi}</div>
+                        )}
                       </div>
                     </div>
                     
@@ -1649,7 +1573,7 @@ export function RezervasyonForm({
                   </CardContent>
                 </Card>
 
-                {/* 6. Ek Bilgiler */}
+                {/* 4. Ek Bilgiler */}
                 {(formData.notlar) && (
                   <Card>
                     <CardHeader className="pb-2 pt-2">

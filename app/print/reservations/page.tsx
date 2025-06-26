@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { MapPin, Users, Clock } from "lucide-react"
+import { getDestinations } from "@/lib/db-firebase"
 
 interface Destination { id: string; name: string; }
 interface TourTemplate { id: string; name: string; }
@@ -20,39 +21,114 @@ interface ReservationPrintData {
   }
   destinations?: Destination[]
   tourTemplates?: TourTemplate[]
+  printMode?: 'driver' | 'admin' // Print modu eklendi
 }
 
 export default function PrintReservationsPage() {
   const [printData, setPrintData] = useState<ReservationPrintData | null>(null)
   const [destinations, setDestinations] = useState<Destination[]>([])
   const [tourTemplates, setTourTemplates] = useState<TourTemplate[]>([])
-
+  
+  // Print mode kontrolü
+  const isAdminMode = printData?.printMode === 'admin'
+  const isDriverMode = printData?.printMode === 'driver'
+  
   useEffect(() => {
-    const storedData = localStorage.getItem('printData');
-    if (storedData) {
-      try {
-        const decodedData = JSON.parse(storedData);
-        setPrintData(decodedData);
-        if (decodedData.destinations) setDestinations(decodedData.destinations);
-        if (decodedData.tourTemplates) setTourTemplates(decodedData.tourTemplates);
-        // İsteğe bağlı: Veri alındıktan sonra localStorage'ı temizle
-        // localStorage.removeItem('printData');
-      } catch (error) {
-        console.error('Veri localStorage\'dan parse edilemedi:', error);
+    const loadData = async () => {
+      const storedData = localStorage.getItem('printData');
+      if (storedData) {
+        try {
+          const decodedData = JSON.parse(storedData);
+          setPrintData(decodedData);
+          
+          // Destinasyonları API'den yükle
+          try {
+            const dests = await getDestinations()
+            setDestinations(dests)
+          } catch (error) {
+            console.error('Destinasyonlar yüklenemedi:', error)
+            // Fallback olarak printData'daki destinasyonları kullan
+            if (decodedData.destinations) setDestinations(decodedData.destinations);
+          }
+          
+          if (decodedData.tourTemplates) setTourTemplates(decodedData.tourTemplates);
+        } catch (error) {
+          console.error('Veri localStorage\'dan parse edilemedi:', error);
+        }
       }
     }
+    
+    loadData()
   }, [])
 
   // Helperlar
   const getDestinationName = (id: string) => {
     if (!id) return '-';
     const found = destinations.find(d => d.id === id)
-    return found ? found.name : id
+    return found ? found.name : (id.length > 20 ? id.substring(0, 20) + '...' : id)
   }
   const getTourTemplateName = (id: string) => {
     if (!id) return '-';
     const found = tourTemplates.find(t => t.id === id)
     return found ? found.name : id
+  }
+
+  // Alış yeri bilgisini doğru formatla
+  const getAlisYeriBilgisi = (reservation: any) => {
+    if (!reservation.alisDetaylari) return reservation.alisYeri || '-';
+    
+    switch (reservation.alisYeri) {
+      case 'Otel':
+        return reservation.alisDetaylari["Otel Adı"] || '-';
+      case 'Acenta':
+        return reservation.alisDetaylari["Acenta Adı"] || '-';
+      case 'Özel Adres':
+      case 'Buluşma Noktası':
+        return reservation.alisDetaylari["Adres"] || reservation.alisYeri || '-';
+      default:
+        return reservation.alisYeri || '-';
+    }
+  }
+
+  // Özel istekler verilerini al
+  const getOzelIsteklerFromAlisYeri = (reservation: any) => {
+    if (!reservation.alisDetaylari) return '';
+    
+    switch (reservation.alisYeri) {
+      case 'Acenta':
+        return reservation.alisDetaylari?.Adres || '';
+      case 'Otel':
+        return reservation.alisDetaylari?.['Özel Talimatlar'] || '';
+      case 'Özel Adres':
+      case 'Buluşma Noktası':
+        return [
+          reservation.alisDetaylari?.Adres,
+          reservation.alisDetaylari?.['İletişim'],
+          reservation.alisDetaylari?.['Özel Talimatlar']
+        ].filter(Boolean).join(' | ') || '';
+      default:
+        return '';
+    }
+  }
+
+  // Helper function to format currency
+  const formatCurrency = (amount: string | number, currency: string) => {
+    const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+    if (isNaN(numAmount)) return amount;
+    
+    const formatted = numAmount.toLocaleString('tr-TR', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2
+    });
+    
+    if (currency === 'EUR') {
+      return `${formatted} €`;
+    } else if (currency === 'USD') {
+      return `${formatted} $`;
+    } else if (currency === 'TRY' || currency === 'TL') {
+      return `${formatted} ₺`;
+    }
+    return `${formatted} ${currency}`;
   }
 
   if (!printData) {
@@ -83,15 +159,6 @@ export default function PrintReservationsPage() {
       return dateA - dateB;
     });
   };
-
-  const formatCurrency = (amount: number, currency = 'TRY') => {
-    return new Intl.NumberFormat('tr-TR', {
-      style: 'currency',
-      currency: currency,
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 2,
-    }).format(amount || 0)
-  }
 
   const getStatusBadge = (status: string) => {
     const statusMap: { [key: string]: { label: string, variant: "default" | "secondary" | "destructive" } } = {
@@ -145,14 +212,14 @@ export default function PrintReservationsPage() {
       </div>
 
       {/* Rezervasyon Grupları */}
-      <div className="space-y-6">
+      <div className="space-y-2">
         {Object.entries(groupedReservations).map(([destination, reservations]) => (
           <Card key={destination} className="shadow-none border border-gray-400">
-            <CardHeader className="bg-gray-50 border-b border-gray-400" style={{ padding: '0.25rem' }}>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <MapPin className="h-5 w-5 text-gray-700" />
+            <CardHeader className="bg-gray-50 border-b border-gray-400" style={{ padding: '0.15rem' }}>
+              <CardTitle className="flex items-center gap-2 text-sm">
+                <MapPin className="h-3 w-3 text-gray-700" />
                 {destination}
-                <Badge variant="secondary" className="ml-auto bg-gray-200 text-gray-800">
+                <Badge variant="secondary" className="ml-auto bg-gray-200 text-gray-800 text-xs">
                   {reservations.length} Rezervasyon
                 </Badge>
               </CardTitle>
@@ -161,51 +228,107 @@ export default function PrintReservationsPage() {
               {/* Görseldeki gibi tabloyu düzenleme */}
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-gray-100" style={{ height: '24px' }}>
-                    <TableHead className="border-r border-gray-400 text-center font-bold text-xs" style={{ width: '80px' }}>TARİH</TableHead>
-                    <TableHead className="border-r border-gray-400 text-center font-bold text-xs" style={{ width: '80px' }}>ÖDEME</TableHead>
-                    <TableHead className="border-r border-gray-400 text-center font-bold text-xs" style={{ width: '120px' }}>TUR ŞABLONU</TableHead>
-                    <TableHead className="border-r border-gray-400 text-center font-bold text-xs" style={{ width: '120px' }}>MÜŞTERİ</TableHead>
-                    <TableHead className="border-r border-gray-400 text-center font-bold text-xs" style={{ width: '100px' }}>İLETİŞİM</TableHead>
-                    <TableHead className="border-r border-gray-400 text-center font-bold text-xs" style={{ width: '80px' }}>KİŞİ SAYISI</TableHead>
-                    <TableHead className="border-r border-gray-400 text-center font-bold text-xs" style={{ width: '100px' }}>ALIŞ YERİ</TableHead>
-                    <TableHead className="border-r border-gray-400 text-center font-bold text-xs" style={{ width: '100px' }}>ALIŞ</TableHead>
-                    <TableHead className="text-center font-bold text-xs" style={{ width: '150px' }}>NOTLAR VE ÖZEL İSTEKLER</TableHead>
+                  <TableRow className="bg-gray-100 h-4">
+                    <TableHead className="border-r border-gray-400 text-center font-bold text-[10px] px-0.5 py-0 h-4 leading-none" style={{ width: '60px' }}>TARİH</TableHead>
+                    {isAdminMode && (
+                      <TableHead className="border-r border-gray-400 text-center font-bold text-[10px] px-0.5 py-0 h-4 leading-none" style={{ width: '60px' }}>FİRMA</TableHead>
+                    )}
+                    <TableHead className="border-r border-gray-400 text-center font-bold text-[10px] px-0.5 py-0 h-4 leading-none" style={{ width: '65px' }}>ÖDEME</TableHead>
+                    <TableHead className="border-r border-gray-400 text-center font-bold text-[10px] px-0.5 py-0 h-4 leading-none" style={{ width: '80px' }}>DESTİNASYON</TableHead>
+                    <TableHead className="border-r border-gray-400 text-center font-bold text-[10px] px-0.5 py-0 h-4 leading-none" style={{ width: '90px' }}>MÜŞTERİ</TableHead>
+                    <TableHead className="border-r border-gray-400 text-center font-bold text-[10px] px-0.5 py-0 h-4 leading-none" style={{ width: '75px' }}>İLETİŞİM</TableHead>
+                    <TableHead className="border-r border-gray-400 text-center font-bold text-[10px] px-0.5 py-0 h-4 leading-none" style={{ width: '50px' }}>KİŞİ</TableHead>
+                    <TableHead className="border-r border-gray-400 text-center font-bold text-[10px] px-0.5 py-0 h-4 leading-none" style={{ width: '70px' }}>ALIŞ YERİ</TableHead>
+                    <TableHead className="border-r border-gray-400 text-center font-bold text-[10px] px-0.5 py-0 h-4 leading-none" style={{ width: '60px' }}>ALIŞ</TableHead>
+                    <TableHead className="text-center font-bold text-[10px] px-0.5 py-0 h-4 leading-none" style={{ width: '200px' }}>NOTLAR VE ÖZEL İSTEKLER</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {sortedReservations(reservations).map((reservation) => (
-                    <TableRow key={reservation.id} className="border-b border-gray-400">
-                      <TableCell className="border-r border-gray-400 text-center text-xs py-1">
-                        <div className="font-medium">{reservation.turTarihi ? format(new Date(reservation.turTarihi), "dd MMM yyyy", { locale: tr }) : '-'}</div>
+                    <TableRow key={reservation.id} className="border-b border-gray-400" style={{ height: '10px' }}>
+                      <TableCell className="border-r border-gray-400 text-center text-[10px] px-0.5 py-0" style={{ lineHeight: '1.0', whiteSpace: 'nowrap', overflow: 'hidden' }}>
+                        <div className="font-medium truncate">{reservation.turTarihi ? format(new Date(reservation.turTarihi), "dd MMM", { locale: tr }) : '-'}</div>
                       </TableCell>
-                      <TableCell className="border-r border-gray-400 text-center text-xs py-1">
-                        {reservation.odemeDurumu === "Bekliyor" ? (
-                          <div className="font-medium">{reservation.odemeYapan} / {formatCurrency(reservation.tutar, reservation.paraBirimi)}</div>
-                        ) : getStatusBadge(reservation.odemeDurumu)}
-                      </TableCell>
-                      <TableCell className="border-r border-gray-400 text-center text-xs py-1">
-                        <div className="font-medium">{getTourTemplateName(reservation.turSablonu || "-")}</div>
-                      </TableCell>
-                      <TableCell className="border-r border-gray-400 text-center text-xs py-1">
-                        <div className="font-medium">{reservation.musteriAdiSoyadi}</div>
-                      </TableCell>
-                      <TableCell className="border-r border-gray-400 text-center text-xs py-1">
-                        <div className="font-medium">{reservation.telefon}</div>
-                      </TableCell>
-                      <TableCell className="border-r border-gray-400 text-center text-xs py-1">
-                        <div className="font-medium">{reservation.yetiskinSayisi}{reservation.cocukSayisi > 0 ? `+${reservation.cocukSayisi}Ç` : ""}</div>
-                      </TableCell>
-                      <TableCell className="border-r border-gray-400 text-center text-xs py-1">
-                        <div className="font-medium">{reservation.alisDetaylari?.["Otel Adı"] || '-'}</div>
-                      </TableCell>
-                      <TableCell className="border-r border-gray-400 text-center text-xs py-1">
-                        <div className="font-medium">
-                          {reservation.alisDetaylari?.["Alış Saati"] || "Saat Bilgisi Yok"} {reservation.alisDetaylari?.["Oda Numarası"] ? `Oda:${reservation.alisDetaylari?.["Oda Numarası"]}` : "Oda Bilgisi Yok"}
+                      {isAdminMode && (
+                        <TableCell className="border-r border-gray-400 text-center text-[10px] px-0.5 py-0" style={{ lineHeight: '1.0', whiteSpace: 'nowrap', overflow: 'hidden' }}>
+                          <div className="font-medium truncate">{reservation.firma || '-'}</div>
+                        </TableCell>
+                      )}
+                      <TableCell className="border-r border-gray-400 text-center text-[10px] px-0.5 py-0" style={{ lineHeight: '1.0', whiteSpace: 'nowrap', overflow: 'hidden' }}>
+                        <div className="text-center text-xs leading-none truncate">
+                          {(reservation.odemeDurumu === "Ödendi" || reservation.odemeDurumu === "Kısmi Ödendi" || reservation.odemeDurumu === "Tamamlandı") ? (
+                            <span className={`text-xs font-medium ${reservation.odemeDurumu === "Ödendi" || reservation.odemeDurumu === "Tamamlandı" ? "text-green-700" : "text-orange-600"}`}>
+                              {reservation.odemeDurumu === "Ödendi" ? "✓" : reservation.odemeDurumu === "Tamamlandı" ? "✓" : "◐"}
+                            </span>
+                          ) : isAdminMode ? (
+                            <div className="flex items-center justify-center text-[9px] leading-tight w-full">
+                              <span className="font-medium truncate flex-1 min-w-0 text-center">
+                                {reservation.odemeYapan || '-'}
+                              </span>
+                              {(reservation.toplamTutar || reservation.tutar || reservation.ucret || reservation.miktar) && (
+                                <span className="text-red-600 font-bold truncate flex-1 min-w-0 text-center">
+                                  {formatCurrency(
+                                    reservation.toplamTutar || reservation.tutar || reservation.ucret || reservation.miktar, 
+                                    reservation.paraBirimi || 'TRY'
+                                  )}
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-gray-600 text-xs truncate">
+                              {reservation.odemeYapan || 'Bekliyor'}
+                            </span>
+                          )}
                         </div>
                       </TableCell>
-                      <TableCell className="text-center text-xs py-1">
-                        <div className="font-medium">Notlar: {reservation.notlar || "-"} | Özel İstekler: {reservation.ozelIstekler || "-"}</div>
+                      <TableCell className="border-r border-gray-400 text-center text-[10px] px-0.5 py-0" style={{ lineHeight: '1.0', whiteSpace: 'nowrap', overflow: 'hidden' }}>
+                        <div className="font-medium truncate">{getDestinationName(reservation.destinasyon)}</div>
+                      </TableCell>
+                      <TableCell className="border-r border-gray-400 text-center text-[10px] px-0.5 py-0" style={{ lineHeight: '1.0', whiteSpace: 'nowrap', overflow: 'hidden' }}>
+                        <div className="font-medium truncate">{reservation.musteriAdiSoyadi}</div>
+                      </TableCell>
+                      <TableCell className="border-r border-gray-400 text-center text-[10px] px-0.5 py-0" style={{ lineHeight: '1.0', whiteSpace: 'nowrap', overflow: 'hidden' }}>
+                        <div className="font-medium truncate">{reservation.telefon}</div>
+                      </TableCell>
+                      <TableCell className="border-r border-gray-400 text-center text-[10px] px-0.5 py-0" style={{ lineHeight: '1.0', whiteSpace: 'nowrap', overflow: 'hidden' }}>
+                        <div className="font-medium truncate">{reservation.yetiskinSayisi}{reservation.cocukSayisi > 0 ? `+${reservation.cocukSayisi}Ç` : ""}</div>
+                      </TableCell>
+                      <TableCell className="border-r border-gray-400 text-center text-[10px] px-0.5 py-0" style={{ lineHeight: '1.0', whiteSpace: 'nowrap', overflow: 'hidden' }}>
+                        <div className="font-medium truncate">{getAlisYeriBilgisi(reservation)}</div>
+                      </TableCell>
+                      <TableCell className="border-r border-gray-400 text-center text-[10px] px-0.5 py-0" style={{ lineHeight: '1.0', whiteSpace: 'nowrap', overflow: 'hidden' }}>
+                        <div className="text-xs truncate">
+                          {(() => {
+                            const alisSaati = reservation.alisDetaylari && reservation.alisDetaylari["Alış Saati"] ? reservation.alisDetaylari["Alış Saati"] : "";
+                            const odaNumarasi = reservation.alisDetaylari && reservation.alisDetaylari["Oda Numarası"] ? reservation.alisDetaylari["Oda Numarası"] : "";
+                            
+                            if (alisSaati && odaNumarasi) {
+                              return `${alisSaati} Oda:${odaNumarasi}`;
+                            } else if (alisSaati) {
+                              return alisSaati;
+                            } else if (odaNumarasi) {
+                              return `Oda:${odaNumarasi}`;
+                            } else {
+                              return "-";
+                            }
+                          })()}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-left text-[10px] px-1 py-0" style={{ lineHeight: '1.1', maxWidth: '200px', whiteSpace: 'nowrap', overflow: 'hidden' }}>
+                        <div className="text-xs truncate">
+                          {(() => {
+                            const ozelIsteklerData = getOzelIsteklerFromAlisYeri(reservation);
+                            const notlar = reservation.notlar || "";
+                            
+                            // İçerik parçalarını topla
+                            const contentParts = [];
+                            if (notlar) contentParts.push(notlar);
+                            if (ozelIsteklerData) contentParts.push(ozelIsteklerData);
+                            
+                            // Eğer hiç içerik yoksa "-" göster, varsa "/" ile ayır
+                            return contentParts.length > 0 ? contentParts.join(" / ") : "-";
+                          })()}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -224,7 +347,7 @@ export default function PrintReservationsPage() {
       <style jsx global>{`
         @media print {
           @page {
-            margin: 1cm;
+            margin: 0.8cm;
             size: A4 landscape;
           }
           body {
@@ -241,19 +364,29 @@ export default function PrintReservationsPage() {
             display: none !important;
           }
           table {
-            font-size: 9px !important;
+            font-size: 7px !important;
             width: 100% !important;
           }
           th, td {
-            padding: 2px !important;
+            padding: 1px !important;
             border: 1px solid #333 !important;
           }
           th {
             background-color: #f0f0f0 !important;
             font-weight: bold !important;
+            height: 12px !important;
           }
-          .space-y-6 > * + * {
-            margin-top: 1rem !important;
+          tr {
+            height: 10px !important;
+          }
+          .space-y-2 > * + * {
+            margin-top: 0.5rem !important;
+          }
+          .CardHeader {
+            padding: 0.1rem !important;
+          }
+          .CardTitle {
+            font-size: 12px !important;
           }
         }
       `}</style>

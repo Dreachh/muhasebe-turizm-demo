@@ -188,16 +188,8 @@ const splitCustomerName = (fullName: string) => {
 const formatPhoneNumber = (phone: string) => {
   if (!phone) return { line1: '', line2: '' };
   
-  // Eğer telefon numarası çok uzunsa, böl
-  if (phone.length > 15) {
-    const midpoint = Math.ceil(phone.length / 2);
-    return {
-      line1: phone.substring(0, midpoint),
-      line2: phone.substring(midpoint)
-    };
-  }
-  
-  return { line1: phone, line2: '' };
+  // Telefon numarasını olduğu gibi tek satırda göster
+  return { line1: phone || "-", line2: '' };
 }
 
 const getStatusBadge = (status: string) => {
@@ -404,7 +396,13 @@ export function MainDashboard({ onNavigate, financialData = [], toursData = [], 
   }, []);
 
   // Helper functions to resolve IDs to names
-  const getDestinationName = (destinationId: string) => {
+  const getDestinationName = (destinationId: string, reservation?: any) => {
+    // Önce rezervasyondan destinationName'i al
+    if (reservation?.destinationName) {
+      return reservation.destinationName;
+    }
+    
+    // Fallback: destinations prop'undan arama yap
     const destination = destinations.find(d => d.id === destinationId);
     return destination ? destination.name : destinationId;
   };
@@ -663,10 +661,10 @@ export function MainDashboard({ onNavigate, financialData = [], toursData = [], 
   // Status badge function like in rezervasyon-liste
   const getStatusBadge = (status: string) => {
     const statusConfig = {
-      "Ödendi": "bg-green-100 text-green-800",
-      "Bekliyor": "bg-yellow-100 text-yellow-800", 
-      "Kısmi Ödendi": "bg-blue-100 text-blue-800",
-      "İptal": "bg-red-100 text-red-800"
+      "Ödendi": "bg-green-100 text-green-800 text-[8px] px-1 py-0.5 h-4 text-center",
+      "Bekliyor": "bg-yellow-100 text-yellow-800 text-xs px-2 py-1", 
+      "Kısmi Ödendi": "bg-blue-100 text-blue-800 text-xs px-2 py-1",
+      "İptal": "bg-red-100 text-red-800 text-xs px-2 py-1"
     } as const
     
     const className = statusConfig[status as keyof typeof statusConfig] || statusConfig["Bekliyor"]
@@ -989,30 +987,30 @@ export function MainDashboard({ onNavigate, financialData = [], toursData = [], 
             </div>
           </div>
         </CardHeader>        <CardContent className="pt-0 pb-4">
-          <div className="overflow-x-auto">
-            <Table className="border-collapse table-auto w-full">              <colgroup>
+          <div className="overflow-x-auto">            <Table className="border-collapse table-auto w-full">
+              <colgroup>
                 <col style={{width: '60px'}}/>
-                <col style={{width: '65px'}}/>
-                <col style={{width: '160px'}}/>
-                <col style={{width: '110px'}}/>
-                <col style={{width: '220px'}}/>
-                <col style={{width: '100px'}}/>
-                <col style={{width: '110px'}}/>
                 <col style={{width: '50px'}}/>
+                <col style={{width: '160px'}}/>
+                <col style={{width: '85px'}}/>
+                <col style={{width: '110px'}}/>
+                <col style={{width: '100px'}}/>
+                <col style={{width: '130px'}}/>
+                <col style={{width: '35px'}}/>
                 <col style={{width: '140px'}}/>
                 <col style={{width: '100px'}}/>
               </colgroup>
               <TableHeader>
                 <TableRow className="border-b-2 border-black bg-gray-100">
-                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '60px'}}>SERİ</TableHead>
-                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '65px'}}>TARİH</TableHead>
-                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '160px'}}>FİRMA</TableHead>
-                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '110px'}}>ÖDEME</TableHead>
-                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '220px'}}>TUR ŞABLONU</TableHead>
-                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '100px'}}>MÜŞTERİ</TableHead>
-                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '110px'}}>İLETİŞİM</TableHead>
-                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '50px'}}>KİŞİ SAYISI</TableHead>
-                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '140px'}}>ALIŞ YERİ</TableHead>
+                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-1 px-1 leading-tight" style={{width: '60px'}}>SERİ</TableHead>
+                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-1 px-1 leading-tight" style={{width: '50px'}}>TARİH</TableHead>
+                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-1 px-1 leading-tight" style={{width: '160px'}}>FİRMA</TableHead>
+                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-1 px-1 leading-tight" style={{width: '85px'}}>ÖDEME</TableHead>
+                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-1 px-1 leading-tight" style={{width: '110px'}}>DESTİNASYON</TableHead>
+                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-1 px-1 leading-tight" style={{width: '100px'}}>MÜŞTERİ</TableHead>
+                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-1 px-1 leading-tight" style={{width: '130px'}}>İLETİŞİM</TableHead>
+                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-1 px-1 leading-tight" style={{width: '35px'}}>KİŞİ SAYISI</TableHead>
+                  <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-1 px-1 leading-tight" style={{width: '140px'}}>ALIŞ YERİ</TableHead>
                   <TableHead className="border-r border-gray-200 text-center text-xs font-bold py-2 px-2" style={{width: '100px'}}>ALIŞ</TableHead>
                 </TableRow>
               </TableHeader>
@@ -1084,40 +1082,36 @@ export function MainDashboard({ onNavigate, financialData = [], toursData = [], 
                         <TableRow 
                           key={`reservation-${reservation.id || index}`}
                           className={`${rowBgClass} relative`}
-                        >                          <TableCell className="font-bold text-sm border-r border-gray-200 text-center align-top py-2 px-2" style={{width: '60px'}}>
+                        >                          <TableCell className="font-bold text-sm border-r border-gray-200 text-center align-top py-1 px-1 leading-tight" style={{width: '60px'}}>
                             <div className="text-xs text-gray-500 leading-tight">RZV-</div>
                             <div className="text-sm font-bold leading-tight">{reservation.seriNumarasi?.replace('RZV-', '') || '0001'}</div>
                           </TableCell>
-                          <TableCell className="font-medium border-r border-gray-200 text-center align-top py-2 px-2" style={{width: '65px'}}>
+                          <TableCell className="font-medium border-r border-gray-200 text-center align-top py-1 px-1 leading-tight" style={{width: '50px'}}>
                             <div className="font-bold text-sm leading-tight">{format(new Date(reservation.turTarihi), "dd", { locale: tr })}</div>
                             <div className="text-xs text-gray-500 leading-tight">{format(new Date(reservation.turTarihi), "MMM", { locale: tr })}</div>
-                          </TableCell>                          <TableCell className="text-sm border-r border-gray-200 text-center align-top py-2 px-2" style={{width: '160px'}}>
+                          </TableCell>                          <TableCell className="text-sm border-r border-gray-200 text-center align-top py-1 px-1 leading-tight" style={{width: '160px'}}>
                             <div className="space-y-1">
                               <div className="font-medium text-xs leading-tight">{reservation.firma}</div>
                               <div className="text-xs text-gray-500 leading-tight">{reservation.yetkiliKisi}</div>
                             </div>
-                          </TableCell><TableCell className="border-r border-gray-200 align-top py-2 px-2" style={{width: '110px'}}>
+                          </TableCell>                          <TableCell className="border-r border-gray-200 align-top py-1 px-1 leading-tight" style={{width: '85px'}}>
                             <div className="space-y-1 text-center">
                               {getStatusBadge(reservation.odemeDurumu)}
                               <div className="text-xs text-gray-500 leading-tight">
                                 {(reservation.odemeYapan || reservation.odemeYontemi) && (
-                                  <div>{reservation.odemeYapan || ''}{reservation.odemeYapan && reservation.odemeYontemi ? '/' : ''}{reservation.odemeYontemi || ''}</div>
+                                  <div className="text-xs">{reservation.odemeYapan || ''}{reservation.odemeYapan && reservation.odemeYontemi ? '/' : ''}{reservation.odemeYontemi || ''}</div>
                                 )}
-                                <div className="font-medium text-gray-800">
+                                <div className="font-bold text-gray-900 text-sm">
                                   {formatCurrencyLocal(reservation.tutar, reservation.paraBirimi)}
                                 </div>
                               </div>
                             </div>
-                          </TableCell>                          <TableCell className="border-r border-gray-200 text-center align-top py-2 px-2" style={{width: '220px'}}>
+                          </TableCell><TableCell className="border-r border-gray-200 text-center align-top py-1 px-1 leading-tight" style={{width: '110px'}}>
                             <div className="space-y-1">
-                              <div className="font-medium text-sm leading-tight">{getTourTemplateName(reservation.turSablonu)}</div>
-                              <div className="flex items-center justify-center gap-1 text-xs text-gray-500">
-                                <MapPin className="h-3 w-3 flex-shrink-0" />
-                                <span className="leading-tight">{getDestinationName(reservation.destinasyon)}</span>
-                              </div>
+                              <div className="font-medium text-sm leading-tight">{getDestinationName(reservation.destinasyon, reservation)}</div>
                             </div>
                           </TableCell>
-                          <TableCell className="font-medium border-r border-gray-200 text-center align-top py-2 px-2" style={{width: '100px'}}>
+                          <TableCell className="font-medium border-r border-gray-200 text-center align-top py-1 px-1 leading-tight" style={{width: '100px'}}>
                             <div className="space-y-1">
                               <div className="text-sm font-medium leading-tight">{splitCustomerName(reservation.musteriAdiSoyadi).line1}</div>
                               {splitCustomerName(reservation.musteriAdiSoyadi).line2 && (
@@ -1128,23 +1122,20 @@ export function MainDashboard({ onNavigate, financialData = [], toursData = [], 
                               )}
                             </div>
                           </TableCell>
-                          <TableCell className="border-r border-gray-200 text-center align-top py-2 px-2" style={{width: '110px'}}>
-                            <div className="text-sm space-y-1">
-                              <div className="font-medium leading-tight">{formatPhoneNumber(reservation.telefon).line1}</div>
-                              {formatPhoneNumber(reservation.telefon).line2 && (
-                                <div className="text-xs text-gray-600 leading-tight">{formatPhoneNumber(reservation.telefon).line2}</div>
-                              )}
+                          <TableCell className="border-r border-gray-200 text-center align-top py-1 px-1 leading-tight" style={{width: '130px'}}>
+                            <div className="text-sm">
+                              <div className="font-medium leading-tight">{reservation.telefon || "-"}</div>
                             </div>
                           </TableCell>
-                          <TableCell className="border-r border-gray-200 text-center align-top py-2 px-2" style={{width: '50px'}}>
+                          <TableCell className="border-r border-gray-200 text-center align-top py-1 px-1 leading-tight" style={{width: '35px'}}>
                             <div className="flex items-center justify-center gap-1 text-sm">
                               <Users className="h-3 w-3 flex-shrink-0" />
-                              <span className="text-sm font-medium">
+                              <span className="text-xs font-medium">
                                 {parseInt(reservation.yetiskinSayisi?.toString() || "0")}
                                 {parseInt(reservation.cocukSayisi?.toString() || "0") > 0 && `+${parseInt(reservation.cocukSayisi?.toString() || "0")}Ç`}
                               </span>
                             </div>
-                          </TableCell>                          <TableCell className="border-r border-gray-200 text-center align-top py-2 px-2" style={{width: '140px'}}>
+                          </TableCell>                          <TableCell className="border-r border-gray-200 text-center align-top py-1 px-1 leading-tight" style={{width: '140px'}}>
                             <div className="space-y-1">
                               <div className="font-medium text-sm leading-tight">{reservation.alisYeri}</div>
                               <div className="text-xs text-gray-500 leading-tight">
@@ -1161,7 +1152,7 @@ export function MainDashboard({ onNavigate, financialData = [], toursData = [], 
                               </div>
                             </div>
                           </TableCell>
-                          <TableCell className="border-r border-gray-200 text-center align-top py-2 px-2" style={{width: '100px'}}>
+                          <TableCell className="border-r border-gray-200 text-center align-top py-1 px-1 leading-tight" style={{width: '100px'}}>
                             <div className="text-sm space-y-1">
                               {reservation.alisDetaylari && reservation.alisDetaylari["Alış Saati"] && (
                                 <div className="flex items-center justify-center gap-1 text-xs text-gray-500">

@@ -5,6 +5,7 @@ import { RezervasyonForm } from './rezervasyon-form'
 import { RezervasyonListe } from './rezervasyon-liste'
 import { useToast } from '@/hooks/use-toast'
 import { getReservations } from '@/lib/db'
+import { getReservationDestinations, getTourTemplates } from '@/lib/db-firebase'
 import { Rezervasyon } from '@/types/rezervasyon-types'
 
 type ViewMode = 'list' | 'create' | 'edit'
@@ -14,14 +15,30 @@ export function RezervasyonManagement() {
   const [currentView, setCurrentView] = useState<ViewMode>('list')
   const [editingReservation, setEditingReservation] = useState<Rezervasyon | null>(null)
   const [reservations, setReservations] = useState<Rezervasyon[]>([])
+  const [destinations, setDestinations] = useState<any[]>([])
+  const [tourTemplates, setTourTemplates] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
   // Rezervasyonları yükle
   const loadReservations = async () => {
     setIsLoading(true)
     try {
-      const data = await getReservations()
-      setReservations(data || [])
+      // Rezervasyon, destinasyon ve şablon verilerini paralel yükle
+      const [reservationsData, destinationsData, templatesData] = await Promise.all([
+        getReservations(),
+        getReservationDestinations(),
+        getTourTemplates()
+      ])
+      
+      setReservations(reservationsData || [])
+      setDestinations(destinationsData || [])
+      setTourTemplates(templatesData || [])
+      
+      console.log("✅ Rezervasyon Management - Tüm veriler yüklendi:", {
+        reservations: reservationsData?.length || 0,
+        destinations: destinationsData?.length || 0,
+        templates: templatesData?.length || 0
+      });
     } catch (error) {
       console.error('Rezervasyonlar yüklenirken hata:', error)
       toast({
@@ -34,9 +51,32 @@ export function RezervasyonManagement() {
     }
   }
 
+  // Destinasyonları ve tur şablonlarını yükle
+  const loadDestinationsAndTourTemplates = async () => {
+    setIsLoading(true)
+    try {
+      const [destinationsData, tourTemplatesData] = await Promise.all([
+        getReservationDestinations(),
+        getTourTemplates(),
+      ])
+      setDestinations(destinationsData || [])
+      setTourTemplates(tourTemplatesData || [])
+    } catch (error) {
+      console.error('Destinasyonlar ve tur şablonları yüklenirken hata:', error)
+      toast({
+        title: "Hata",
+        description: "Destinasyonlar ve tur şablonları yüklenirken bir hata oluştu.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   // Component mount olduğunda rezervasyonları yükle
   useEffect(() => {
     loadReservations()
+    loadDestinationsAndTourTemplates()
   }, [])
 
   // Yeni rezervasyon oluşturma
@@ -123,6 +163,8 @@ export function RezervasyonManagement() {
       return (
         <RezervasyonListe
           reservationsData={reservations}
+          destinations={destinations}
+          tourTemplates={tourTemplates}
           isLoading={isLoading}
           onAddNew={handleAddNew}
           onEdit={handleEdit}

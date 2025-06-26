@@ -80,9 +80,9 @@ export function Sidebar({ currentView, onNavigate }: SidebarProps) {
               <DollarSign className="h-4 w-4 shrink-0" />
               {!collapsed && <span className="ml-2 text-left block w-full">Finansal Giriş</span>}
             </Button>
-            <Button variant="ghost" className={`w-full justify-start items-center text-left px-2 py-2 ${currentView === "debts" ? "bg-[#00a1c6] text-white" : "text-gray-700 hover:bg-gray-100"}`} onClick={() => onNavigate("debts")}>
+            <Button variant="ghost" className={`w-full justify-start items-center text-left px-2 py-2 ${currentView === "debts" ? "bg-[#00a1c6] text-white" : "text-gray-700 hover:bg-gray-100"}`} onClick={() => onNavigate("debts")}> 
               <Receipt className="h-4 w-4 shrink-0" />
-              {!collapsed && <span className="ml-2 text-left block w-full">Borçlar</span>}
+              {!collapsed && <span className="ml-2 text-left block w-full">Cari</span>}
             </Button>
             <Button variant="ghost" className={`w-full justify-start items-center text-left px-2 py-2 border-b border-black ${currentView === "period-data" ? "bg-[#00a1c6] text-white" : "text-gray-700 hover:bg-gray-100"}`} onClick={() => onNavigate("period-data")}>
               <BarChart2 className="h-4 w-4 shrink-0" />

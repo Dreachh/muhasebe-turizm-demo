@@ -19,13 +19,13 @@ export default function DebtManagement() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-2xl font-bold">Borç Yönetimi</h2>
+        <h2 className="text-2xl font-bold">Cari Yönetimi</h2>
       </div>
       
-      <Tabs defaultValue="supplier" value={activeTab} onValueChange={(value) => setActiveTab(value as "supplier" | "customer")}>
+      <Tabs defaultValue="supplier" value={activeTab} onValueChange={(value) => setActiveTab(value as "supplier" | "customer")}> 
         <TabsList className="w-full grid grid-cols-2">
-          <TabsTrigger value="supplier">Tedarikçi Borçları</TabsTrigger>
-          <TabsTrigger value="customer">Müşteri Borçları</TabsTrigger>
+          <TabsTrigger value="supplier">Tedarikçi Cari</TabsTrigger>
+          <TabsTrigger value="customer">Müşteri Cari</TabsTrigger>
         </TabsList>
         
         <TabsContent value="supplier">
@@ -494,9 +494,9 @@ function LegacyDebtManagement() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <div>
-            <CardTitle className="text-2xl font-bold">Borç Yönetimi</CardTitle>
+            <CardTitle className="text-2xl font-bold">Cari Yönetimi</CardTitle>
             <CardDescription>
-              Tedarikçilere olan borçlarınızı takip edin ve ödeme durumlarını güncelleyin
+              Tedarikçilere olan carilerinizi takip edin ve ödeme durumlarını güncelleyin
             </CardDescription>
           </div>
           <div className="flex items-center space-x-2">
@@ -508,14 +508,14 @@ function LegacyDebtManagement() {
                 <SelectValue placeholder="Filtrele" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tüm Borçlar</SelectItem>
+                <SelectItem value="all">Tüm Cariler</SelectItem>
                 <SelectItem value="unpaid">Ödenmemiş</SelectItem>
                 <SelectItem value="partially_paid">Kısmen Ödenmiş</SelectItem>
                 <SelectItem value="paid">Ödenmiş</SelectItem>
               </SelectContent>
             </Select>
             <Button onClick={openAddDialog}>
-              <Plus className="mr-2 h-4 w-4" /> Borç Ekle
+              <Plus className="mr-2 h-4 w-4" /> Cari Ekle
             </Button>
           </div>
         </CardHeader>
