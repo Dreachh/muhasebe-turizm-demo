@@ -59,6 +59,7 @@ export const COLLECTIONS = {  // Ana veri koleksiyonları
   // Rezervasyon ayar koleksiyonları
   reservationCompanies: "reservationCompanies",
   pickupTypes: "pickupTypes",
+  paymentPayers: "paymentPayers",
   referenceSources: "referenceSources",
   
   // DEPRECATED: Aşağıdaki koleksiyonlar artık kullanılmıyor
@@ -828,6 +829,7 @@ export async function getReservationSettings(type: string): Promise<any[]> {
       countries: 'countries',
       paymentMethods: 'paymentMethods',
       paymentStatuses: 'paymentStatuses',
+      paymentPayers: 'paymentPayers', // Ödeme yapanlar için koleksiyon
       referenceSources: 'referenceSources'
     };
 
@@ -912,6 +914,15 @@ function getSampleData(type: string): any[] {
         { id: 'partial', name: 'Kısmi Ödeme', value: 'partial' }
       ];
     
+    case 'paymentPayers':
+      return [
+        { id: 'customer', name: 'Müşteri', value: 'customer' },
+        { id: 'agency', name: 'Acenta', value: 'agency' },
+        { id: 'company', name: 'Aracı Firma', value: 'company' },
+        { id: 'hotel', name: 'Otel', value: 'hotel' },
+        { id: 'other', name: 'Diğer', value: 'other' }
+      ];
+    
     case 'referenceSources':
       return [
         { id: 'website', name: 'Web Sitesi', value: 'website' },
@@ -972,6 +983,7 @@ export async function saveReservationSettings(type: string, data: any[]): Promis
       countries: 'countries',
       paymentMethods: 'paymentMethods',
       paymentStatuses: 'paymentStatuses',
+      paymentPayers: 'paymentPayers', // Ödeme yapanlar için koleksiyon
       referenceSources: 'referenceSources'
     };
 

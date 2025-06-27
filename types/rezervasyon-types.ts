@@ -19,6 +19,7 @@ export interface Rezervasyon {
   turSablonu: string;
   yetiskinSayisi: string | number;
   cocukSayisi: string | number;
+  bebekSayisi: string | number;
   alisSaati: string;
   musteriAdiSoyadi: string;
   telefon: string;
@@ -36,7 +37,9 @@ export interface Rezervasyon {
   odemeYapan: string;
   odemeYontemi: string;
   odemeDurumu: "Ödendi" | "Bekliyor" | "Kısmi Ödendi" | "İptal" | "Tamamlandı";
-  tutar: string | number;
+  toplamTutar?: string | number; // Toplam tur tutarı
+  odemeMiktari?: string | number; // Ödenen miktar
+  tutar: string | number; // Geriye uyumluluk için
   paraBirimi: string;
   odemeTarihi: string;
   odemeNotlari: string;
