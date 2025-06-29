@@ -722,18 +722,14 @@ export function RezervasyonListe({
                             <TableCell className="border-r border-gray-200 align-top py-0 px-0 h-4" style={{width: '65px'}}>
                               <div className="text-center text-[10px] leading-tight w-full">
                                 {(reservation.odemeDurumu === "Ödendi" || reservation.odemeDurumu === "Tamamlandı") ? (
-                                  <div className="flex flex-col items-center justify-center text-[10px] leading-tight w-full">
-                                    <span className="text-[12px] font-medium text-green-700">
-                                      ✓ {reservation.odemeYapan || 'TAM'}
-                                    </span>
-                                  </div>
+                                  <span className="text-[10px] font-medium text-green-700 truncate w-full block">
+                                    ✓ {reservation.odemeYapan || 'TAM'}
+                                  </span>
                                 ) : (
-                                  <div className="flex flex-col items-center justify-center text-[10px] leading-tight w-full">
-                                    <span className="font-medium truncate w-full text-center">
-                                      {reservation.odemeYapan || '-'}
-                                    </span>
+                                  <div className="text-[10px] truncate w-full">
+                                    <span className="font-medium">{reservation.odemeYapan || '-'}</span>
                                     {(reservation.odemeMiktari || reservation.odenen) && (
-                                      <span className="text-blue-600 font-bold truncate w-full text-center">
+                                      <span className="text-blue-600 font-bold ml-1">
                                         {formatCurrency(
                                           reservation.odemeMiktari || reservation.odenen || 0, 
                                           reservation.paraBirimi || 'TRY'

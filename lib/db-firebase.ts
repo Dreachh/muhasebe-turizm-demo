@@ -749,7 +749,9 @@ export async function getReservations(): Promise<any[]> {
 
     const reservations = querySnapshot.docs.map(doc => {
       const reservationData = doc.data();
-      const destinationName = destinationMap.get(reservationData.destinationId) || "Bilinmeyen";
+      // destinasyon veya destinationId alanını kontrol et
+      const destId = reservationData.destinasyon || reservationData.destinationId;
+      const destinationName = destinationMap.get(destId) || destId || "Belirlenmemiş";
       return {
         id: doc.id,
         ...reservationData,

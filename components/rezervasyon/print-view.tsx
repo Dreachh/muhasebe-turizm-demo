@@ -55,7 +55,11 @@ export default function PrintReservationsPage() {
   const getDestinationName = (id: string) => {
     if (!id) return '-';
     const found = destinations.find(d => d.id === id)
-    return found ? found.name : id
+    if (found) {
+      return found.name || id;
+    }
+    // ID çok uzunsa kısalt
+    return id.length > 20 ? id.substring(0, 20) + '...' : id;
   }
   const getTourTemplateName = (id: string) => {
     if (!id) return '-';

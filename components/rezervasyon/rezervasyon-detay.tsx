@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Printer, X } from "lucide-react"
 import { format } from "date-fns"
-import { getDestinations } from "@/lib/db-firebase"
+import { getDestinations, getReservationDestinations } from "@/lib/db-firebase"
 
 interface RezervasyonDetayProps {
   reservation: any
@@ -18,7 +18,7 @@ export function RezervasyonDetay({ reservation, onClose }: RezervasyonDetayProps
     // Destinasyonları yükle
     const loadDestinations = async () => {
       try {
-        const dests = await getDestinations()
+        const dests = await getReservationDestinations()
         setDestinations(dests)
       } catch (error) {
         console.error('Destinasyonlar yüklenemedi:', error)
@@ -35,7 +35,10 @@ export function RezervasyonDetay({ reservation, onClose }: RezervasyonDetayProps
   const getDestinationName = (destId: string) => {
     if (!destId) return "-"
     const dest = destinations.find(d => d.id === destId)
-    return dest ? dest.name : destId
+    if (dest) {
+      return dest.name || destId;
+    }
+    return destId
   }
 
   // ESC tuşu ile kapatma

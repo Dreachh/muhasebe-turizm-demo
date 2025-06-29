@@ -13,7 +13,7 @@ import { tr } from "date-fns/locale"
 import { fetchExchangeRates } from "@/lib/currency-service"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { getDestinations, getTourTemplates } from "@/lib/db-firebase"
+import { getDestinations, getTourTemplates, getReservationDestinations } from "@/lib/db-firebase"
 
 // Currency display style
 import styles from "./money-display.module.css";
@@ -383,7 +383,7 @@ export function MainDashboard({ onNavigate, financialData = [], toursData = [], 
     const loadData = async () => {
       try {
         const [destinationsData, templatesData] = await Promise.all([
-          getDestinations(),
+          getReservationDestinations(),
           getTourTemplates()
         ]);
         setDestinations(destinationsData);
@@ -397,14 +397,19 @@ export function MainDashboard({ onNavigate, financialData = [], toursData = [], 
 
   // Helper functions to resolve IDs to names
   const getDestinationName = (destinationId: string, reservation?: any) => {
-    // Önce rezervasyondan destinationName'i al
-    if (reservation?.destinationName) {
+    // Önce rezervasyondan destinationName'i al (eğer "Bilinmeyen" değilse)
+    if (reservation?.destinationName && reservation.destinationName !== "Bilinmeyen") {
       return reservation.destinationName;
     }
     
     // Fallback: destinations prop'undan arama yap
     const destination = destinations.find(d => d.id === destinationId);
-    return destination ? destination.name : destinationId;
+    if (destination) {
+      return destination.name || destination.title || destinationId;
+    }
+    
+    // Son fallback: ID'yi olduğu gibi döndür ama uzunsa kısalt
+    return destinationId || 'Belirlenmemiş';
   };
 
   const getTourTemplateName = (templateId: string) => {

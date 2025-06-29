@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { MapPin, Users, Clock } from "lucide-react"
-import { getDestinations } from "@/lib/db-firebase"
+import { getDestinations, getReservationDestinations } from "@/lib/db-firebase"
 
 interface Destination { id: string; name: string; }
 interface TourTemplate { id: string; name: string; }
@@ -43,7 +43,7 @@ export default function PrintReservationsPage() {
           
           // Destinasyonları API'den yükle
           try {
-            const dests = await getDestinations()
+            const dests = await getReservationDestinations()
             setDestinations(dests)
           } catch (error) {
             console.error('Destinasyonlar yüklenemedi:', error)
@@ -65,7 +65,11 @@ export default function PrintReservationsPage() {
   const getDestinationName = (id: string) => {
     if (!id) return '-';
     const found = destinations.find(d => d.id === id)
-    return found ? found.name : (id.length > 20 ? id.substring(0, 20) + '...' : id)
+    if (found) {
+      return found.name || id;
+    }
+    // ID çok uzunsa kısalt
+    return id.length > 20 ? id.substring(0, 20) + '...' : id;
   }
   const getTourTemplateName = (id: string) => {
     if (!id) return '-';

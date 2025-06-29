@@ -199,7 +199,7 @@ export default function Home() {  const [currentView, setCurrentView] = useState
       // Rezervasyon ve şablon verilerini paralel yükle
       const [reservations, destinations, templates] = await Promise.all([
         getReservations(),
-        getAllData('reservationDestinations'), // getReservations zaten isimleri alıyor, bu saf veri için
+        getReservationDestinations(), // Rezervasyon sistemi için doğru koleksiyon
         getAllData('tourTemplates')
       ]);
 
