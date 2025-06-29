@@ -55,11 +55,11 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
   const [cariList, setCariList] = useState<ReservationCari[]>([]);
   const [filteredCariList, setFilteredCariList] = useState<ReservationCari[]>([]);
   const [expandedCariIds, setExpandedCariIds] = useState<Set<string>>(new Set());
-  const [cariDetails, setCariDetails] = useState<{[key: string]: {
+  const [cariDetails, setCariDetails] = useState<Record<string, {
     borclar: any[];
     odemeler: ReservationOdemeDetay[];
     detayliListe: any[];
-  }}>({})
+  }>>({});
   const [availableCompanies, setAvailableCompanies] = useState<any[]>([]);
   const [destinations, setDestinations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -102,6 +102,86 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
     filterCariList();
   }, [cariList, searchTerm, filterType]);
 
+  // Otomatik güncelleme sistemi - cari detayları için
+  useEffect(() => {
+    if (expandedCariIds.size === 0) return;
+
+    const autoRefreshInterval = setInterval(async () => {
+      const expandedIds = Array.from(expandedCariIds);
+      for (const cariId of expandedIds) {
+        try {
+          const [borclar, odemeler, detayliListe] = await Promise.all([
+            ReservationCariService.getBorcDetaysByCariId(cariId),
+            ReservationCariService.getOdemeDetaysByCariId(cariId),
+            ReservationCariService.getBorcDetaylarWithReservationInfo(cariId)
+          ]);
+          
+          setCariDetails(prev => ({
+            ...prev,
+            [cariId]: { borclar, odemeler, detayliListe }
+          }));
+        } catch (error) {
+          console.error(`Otomatik güncelleme hatası (${cariId}):`, error);
+        }
+      }
+    }, 10000); // 10 saniyede bir güncelle
+
+    return () => clearInterval(autoRefreshInterval);
+  }, [expandedCariIds]);
+
+  // Cari listesini otomatik güncelle
+  useEffect(() => {
+    const cariListRefreshInterval = setInterval(async () => {
+      try {
+        const data = await ReservationCariService.getAllCari(period);
+        setCariList(data);
+        // İstatistikleri de güncelle
+        await loadStatistics();
+      } catch (error) {
+        console.error("Otomatik cari listesi güncelleme hatası:", error);
+      }
+    }, 30000); // 30 saniyede bir güncelle
+
+    return () => clearInterval(cariListRefreshInterval);
+  }, [period]);
+
+  // Otomatik yenileme - her 30 saniyede bir kontrol et
+  useEffect(() => {
+    const autoRefreshInterval = setInterval(async () => {
+      try {
+        // Sadece açık olan cari detaylarını yenile
+        const expandedIds = Array.from(expandedCariIds);
+        if (expandedIds.length > 0) {
+          for (const cariId of expandedIds) {
+            try {
+              const detayliListe = await ReservationCariService.getBorcDetaylarWithReservationInfo(cariId);
+              setCariDetails(prev => ({
+                ...prev,
+                [cariId]: { 
+                  ...prev[cariId], 
+                  detayliListe 
+                }
+              }));
+            } catch (error) {
+              console.error(`Otomatik yenileme hatası (${cariId}):`, error);
+            }
+          }
+        }
+        
+        // Ana cari listesini de sessizce yenile
+        const updatedCariList = await ReservationCariService.getAllCari(period);
+        setCariList(updatedCariList);
+        
+        // İstatistikleri güncelle
+        await loadStatistics();
+      } catch (error) {
+        console.error("Otomatik yenileme hatası:", error);
+      }
+    }, 30000); // 30 saniye
+
+    return () => clearInterval(autoRefreshInterval);
+  }, [period, expandedCariIds]);
+
   // Toplam değerleri hesapla
   const totals = useMemo(() => {
     return cariList.reduce((acc, cari) => {
@@ -111,6 +191,16 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
       return acc;
     }, { totalDebt: 0, totalPayment: 0, totalBalance: 0 });
   }, [cariList]);
+
+  // İstatistik değerleri - backend'den al
+  const [statistics, setStatistics] = useState({
+    totalCariCount: 0,
+    totalReservations: 0,
+    paidReservations: 0,
+    unpaidReservations: 0,
+    debtorCount: 0,
+    creditorCount: 0,
+  });
 
   const loadAvailableCompanies = async () => {
     try {
@@ -155,11 +245,23 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
     }
   };
 
+  const loadStatistics = async () => {
+    try {
+      const stats = await ReservationCariService.getGeneralStatistics(period);
+      setStatistics(stats);
+    } catch (error) {
+      console.error("İstatistik yükleme hatası:", error);
+    }
+  };
+
   const loadCariList = async () => {
     try {
       setLoading(true);
       const data = await ReservationCariService.getAllCari(period);
       setCariList(data);
+      
+      // İstatistikleri de yükle
+      await loadStatistics();
     } catch (error) {
       console.error("Cari listesi yüklenirken hata:", error);
       toast({
@@ -172,46 +274,50 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
     }
   };
 
-  const handleRefresh = async () => {
+  // Cari kartını sil - otomatik güncelleme ile
+  const handleDeleteCari = async (cari: ReservationCari) => {
+    if (!cari.id) return;
+    
+    const isConfirmed = window.confirm(
+      `"${cari.companyName}" cari kartını ve tüm ilgili kayıtları silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.`
+    );
+    
+    if (!isConfirmed) return;
+    
     try {
-      setRefreshing(true);
-      await loadCariList();
-      // Açık olan cari detaylarını da yenile
-      const expandedIds = Array.from(expandedCariIds);
-      if (expandedIds.length > 0) {
-        const refreshPromises = expandedIds.map(async (cariId) => {
-          try {
-            const [borclar, odemeler, detayliListe] = await Promise.all([
-              ReservationCariService.getBorcDetaysByCariId(cariId),
-              ReservationCariService.getOdemeDetaysByCariId(cariId),
-              ReservationCariService.getBorcDetaylarWithReservationInfo(cariId)
-            ]);
-            
-            setCariDetails(prev => ({
-              ...prev,
-              [cariId]: { borclar, odemeler, detayliListe }
-            }));
-          } catch (error) {
-            console.error(`Cari detay yenileme hatası (${cariId}):`, error);
-          }
-        });
-        
-        await Promise.all(refreshPromises);
-      }
+      await ReservationCariService.deleteCari(cari.id);
+      
+      // UI'den cari kartını kaldır
+      setCariList(prevList => prevList.filter(c => c.id !== cari.id));
+      
+      // Cari detaylarından da kaldır
+      setCariDetails(prev => {
+        const updated = { ...prev };
+        delete updated[cari.id!];
+        return updated;
+      });
+      
+      // Genişletilmiş cari listesinden kaldır
+      setExpandedCariIds(prev => {
+        const updated = new Set(prev);
+        updated.delete(cari.id!);
+        return updated;
+      });
+      
+      // İstatistikleri güncelle
+      await loadStatistics();
       
       toast({
         title: "Başarılı",
-        description: "Veriler yenilendi",
+        description: `"${cari.companyName}" cari kartı başarıyla silindi`,
       });
     } catch (error) {
-      console.error("Yenileme hatası:", error);
+      console.error("Cari silme hatası:", error);
       toast({
         title: "Hata",
-        description: "Veriler yenilenirken bir hata oluştu",
+        description: "Cari kartı silinirken bir hata oluştu",
         variant: "destructive",
       });
-    } finally {
-      setRefreshing(false);
     }
   };
 
@@ -299,8 +405,11 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
         notes: "",
       });
 
-      // Verileri yeniden yükle
-      loadCariList();
+      // Otomatik güncelleme sistemi devreye girecek
+      // Manual yenileme yerine sadece bekleme yap
+      setTimeout(() => {
+        loadCariList();
+      }, 1000);
     } catch (error) {
       console.error("Cari oluşturma hatası:", error);
       toast({
@@ -464,26 +573,37 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
   }
 
   return (
-    <div className="container mx-auto px-4 py-6 space-y-6 max-w-7xl">
+    <div className="container mx-auto px-4 py-4 space-y-4 max-w-7xl">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Rezervasyon Cari Kartları</h1>
           <p className="text-gray-600">Dönem: {period}</p>
         </div>
-        <div className="flex gap-2">
-          <Button
-            onClick={handleRefresh}
-            disabled={refreshing}
-            variant="outline"
-            size="sm"
-          >
-            {refreshing ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4" />
-            )}
-          </Button>
+        
+        {/* İstatistik Kartları ve Yeni Cari Butonu - Tek Satırda */}
+        <div className="flex items-center gap-4">
+          {/* İstatistik Kartları */}
+          <div className="flex gap-2">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 min-w-[90px] text-center" title="Toplam cari kart sayısı">
+              <div className="text-blue-600 font-bold text-lg leading-tight">{statistics.totalCariCount}</div>
+              <div className="text-blue-700 text-[11px] font-medium">Toplam Cari</div>
+            </div>
+            <div className="bg-purple-50 border border-purple-200 rounded-lg px-3 py-2 min-w-[90px] text-center" title="Toplam rezervasyon sayısı">
+              <div className="text-purple-600 font-bold text-lg leading-tight">{statistics.totalReservations}</div>
+              <div className="text-purple-700 text-[11px] font-medium">Rezervasyon</div>
+            </div>
+            <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-2 min-w-[90px] text-center" title="Tamamen ödenmiş rezervasyonlar">
+              <div className="text-green-600 font-bold text-lg leading-tight">{statistics.paidReservations}</div>
+              <div className="text-green-700 text-[11px] font-medium">Ödenen</div>
+            </div>
+            <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 min-w-[90px] text-center" title="Bekleyen veya kısmi ödenmiş rezervasyonlar">
+              <div className="text-red-600 font-bold text-lg leading-tight">{statistics.unpaidReservations}</div>
+              <div className="text-red-700 text-[11px] font-medium">Bekleyen</div>
+            </div>
+          </div>
+          
+          {/* Yeni Cari Butonu */}
           <Dialog open={showNewCariDialog} onOpenChange={setShowNewCariDialog}>
             <DialogTrigger asChild>
               <Button>
@@ -679,7 +799,7 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
       </div>
 
       {/* Cari Kartları - Enhanced Style */}
-      <div className="space-y-3">
+      <div className="space-y-2">
         {filteredCariList.map((cari) => {
           const isExpanded = expandedCariIds.has(cari.id!);
           const details = cariDetails[cari.id!];
@@ -691,7 +811,22 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
               <Collapsible>
                 <div className="w-full">
                   <CardHeader className={`hover:bg-gray-50 transition-colors cursor-pointer ${hasUpcoming ? 'bg-red-50' : ''}`}>
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      {/* Sol taraf - Silme butonu */}
+                      <div className="flex items-center">
+                        <div
+                          className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-red-300 bg-red-50 shadow-sm hover:bg-red-100 hover:text-red-900 h-8 px-3 cursor-pointer text-red-700"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteCari(cari);
+                          }}
+                          title="Cari kartını sil"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </div>
+                      </div>
+
+                      {/* Orta - Cari bilgileri */}
                       <CollapsibleTrigger
                         className="flex items-center gap-4 flex-1"
                         onClick={() => toggleCariExpansion(cari)}
@@ -720,6 +855,7 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
                         </div>
                       </CollapsibleTrigger>
                       
+                      {/* Sağ taraf - Finansal bilgiler ve yazdırma */}
                       <div className="flex items-center gap-6">
                         <div className="text-right">
                           <div className="text-sm text-gray-600">Toplam Borç</div>
@@ -744,8 +880,7 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
                         
                         <div className="flex flex-col items-center gap-2">
                           {getBalanceBadge(cari.balance)}
-                          <div
-                            className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground h-8 px-3 cursor-pointer"
+                          <div className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground h-8 px-3 cursor-pointer"
                             onClick={(e) => {
                               e.stopPropagation();
                               handlePrintCari(cari);

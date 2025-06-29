@@ -809,6 +809,16 @@ export async function deleteReservation(id: string): Promise<boolean> {
       return true;
     }
 
+    // Önce rezervasyon cari kayıtlarını temizle
+    try {
+      const { ReservationCariService } = await import('./reservation-cari-service');
+      await ReservationCariService.deleteReservationFromCari(id);
+    } catch (cariError) {
+      console.warn("Rezervasyon cari temizliği sırasında uyarı:", cariError);
+      // Cari temizliği başarısız olsa da rezervasyon silme işlemine devam et
+    }
+
+    // Rezervasyonu sil
     await deleteDoc(doc(firestore, COLLECTIONS.reservations, id));
     return true;
   } catch (error) {

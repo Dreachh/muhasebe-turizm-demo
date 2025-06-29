@@ -403,6 +403,17 @@ export class ReservationCariService {
               id: reservationDoc.id,
               ...reservationDoc.data()
             };
+          } else {
+            // Rezervasyon silinmişse, bu borç kaydı da geçersizdir
+            console.warn(`Rezervasyon bulunamadı: ${borc.reservationId}. Borç kaydı temizlenecek.`);
+            // Bu borç kaydını otomatik olarak temizle
+            try {
+              await deleteDoc(doc(db, COLLECTIONS.reservation_cari_borclar, borc.id!));
+              console.log(`Geçersiz borç kaydı silindi: ${borc.id}`);
+              return null; // Bu kayıt null olarak döner ve filtrelenecek
+            } catch (deleteError) {
+              console.error(`Geçersiz borç kaydı silinirken hata: ${deleteError}`);
+            }
           }
 
           // Destinasyon ID'sini isme çevir (önceden yüklenmiş haritadan)
@@ -452,8 +463,11 @@ export class ReservationCariService {
 
       const detayliListe = await Promise.all(detaylarPromises);
       
+      // Null değerleri filtrele (silinmiş rezervasyonlar)
+      const validDetayliListe = detayliListe.filter(item => item !== null);
+      
       // Yaklaşan rezervasyonları önce göster, sonra tur tarihine göre sırala
-      return detayliListe.sort((a, b) => {
+      return validDetayliListe.sort((a, b) => {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         
@@ -758,6 +772,288 @@ export class ReservationCariService {
     } catch (error) {
       console.error("Rezervasyon güncelleme hatası:", error);
       // Bu hata kritik değil, sadece log'layıp devam ediyoruz
+    }
+  }
+
+  // Rezervasyon silme durumunda cari kayıtlarını temizle
+  static async deleteReservationFromCari(reservationId: string): Promise<void> {
+    try {
+      const db = this.getFirestore();
+      
+      console.log(`Rezervasyon cari temizliği başlatılıyor: ${reservationId}`);
+      
+      // Bu rezervasyona ait borç kayıtlarını bul (hem reservationId hem de seriNumarasi ile ara)
+      const borcQuery1 = query(
+        collection(db, COLLECTIONS.reservation_cari_borclar),
+        where("reservationId", "==", reservationId)
+      );
+      
+      const borcQuery2 = query(
+        collection(db, COLLECTIONS.reservation_cari_borclar),
+        where("reservationSeriNo", "==", reservationId)
+      );
+      
+      const [borcSnapshot1, borcSnapshot2] = await Promise.all([
+        getDocs(borcQuery1),
+        getDocs(borcQuery2)
+      ]);
+      
+      // Her iki sorgunun sonuçlarını birleştir
+      const allBorcDocs = [...borcSnapshot1.docs, ...borcSnapshot2.docs];
+      
+      // Duplicate'leri kaldır (aynı ID'ye sahip olanları)
+      const uniqueBorcDocs = allBorcDocs.filter((doc, index, self) => 
+        index === self.findIndex(d => d.id === doc.id)
+      );
+      
+      console.log(`${uniqueBorcDocs.length} borç kaydı bulundu`);
+      
+      // Etkilenen cari ID'lerini topla
+      const etkilenenCariIds = new Set<string>();
+      
+      // Borç kayıtlarını sil
+      for (const borcDoc of uniqueBorcDocs) {
+        const borcData = borcDoc.data();
+        etkilenenCariIds.add(borcData.cariId);
+        
+        console.log(`Borç kaydı siliniyor: ${borcDoc.id} (Cari: ${borcData.cariId})`);
+        
+        // İlgili ödeme kayıtlarını da sil
+        const odemeQuery = query(
+          collection(db, COLLECTIONS.reservation_cari_odemeler),
+          where("borcId", "==", borcDoc.id)
+        );
+        const odemeSnapshot = await getDocs(odemeQuery);
+        
+        for (const odemeDoc of odemeSnapshot.docs) {
+          console.log(`Ödeme kaydı siliniyor: ${odemeDoc.id}`);
+          await deleteDoc(doc(db, COLLECTIONS.reservation_cari_odemeler, odemeDoc.id));
+        }
+        
+        // Borç kaydını sil
+        await deleteDoc(doc(db, COLLECTIONS.reservation_cari_borclar, borcDoc.id));
+      }
+      
+      console.log(`${etkilenenCariIds.size} cari kartı kontrol edilecek`);
+      
+      // Etkilenen cari kartlarını kontrol et ve gerekirse sil
+      for (const cariId of etkilenenCariIds) {
+        console.log(`Cari kontrol ediliyor: ${cariId}`);
+        await this.checkAndDeleteEmptyCari(cariId);
+      }
+      
+      console.log(`Rezervasyon cari temizliği tamamlandı: ${reservationId}`);
+      
+    } catch (error) {
+      console.error("Rezervasyon cari silme hatası:", error);
+      throw error;
+    }
+  }
+
+  // Boş cari kartını kontrol et ve sil
+  static async checkAndDeleteEmptyCari(cariId: string): Promise<void> {
+    try {
+      const db = this.getFirestore();
+      
+      console.log(`Boş cari kontrolü: ${cariId}`);
+      
+      // Bu cariye ait borç kayıtları var mı kontrol et
+      const borcQuery = query(
+        collection(db, COLLECTIONS.reservation_cari_borclar),
+        where("cariId", "==", cariId)
+      );
+      const borcSnapshot = await getDocs(borcQuery);
+      
+      console.log(`Cari ${cariId} için ${borcSnapshot.docs.length} borç kaydı bulundu`);
+      
+      // Eğer hiç borç kaydı yoksa cari kartını sil
+      if (borcSnapshot.empty) {
+        // Önce cari kartı bilgisini al (log için)
+        const cariRef = doc(db, COLLECTIONS.reservation_cari, cariId);
+        const cariDoc = await getDoc(cariRef);
+        const cariName = cariDoc.exists() ? cariDoc.data().companyName : 'Bilinmeyen';
+        
+        await deleteDoc(cariRef);
+        console.log(`Boş cari kartı silindi: ${cariName} (${cariId})`);
+      } else {
+        // Borç kayıtları varsa bakiyeyi güncelle
+        console.log(`Cari ${cariId} boş değil, bakiye güncelleniyor`);
+        await this.updateCariBalance(cariId);
+      }
+      
+    } catch (error) {
+      console.error("Boş cari kontrol hatası:", error);
+      throw error;
+    }
+  }
+
+  // Bakım fonksiyonu - Geçersiz borç kayıtlarını temizle
+  static async cleanupInvalidDebtRecords(): Promise<number> {
+    try {
+      const db = this.getFirestore();
+      let cleanedCount = 0;
+      
+      // Tüm borç kayıtlarını getir
+      const borcQuery = query(collection(db, COLLECTIONS.reservation_cari_borclar));
+      const borcSnapshot = await getDocs(borcQuery);
+      
+      // Her borç kaydı için rezervasyon var mı kontrol et
+      for (const borcDoc of borcSnapshot.docs) {
+        const borcData = borcDoc.data();
+        const reservationRef = doc(db, 'reservations', borcData.reservationId);
+        const reservationDoc = await getDoc(reservationRef);
+        
+        if (!reservationDoc.exists()) {
+          // Rezervasyon yoksa borç kaydını sil
+          console.log(`Geçersiz borç kaydı siliniyor: ${borcDoc.id} (Rezervasyon: ${borcData.reservationId})`);
+          
+          // İlgili ödeme kayıtlarını da sil
+          const odemeQuery = query(
+            collection(db, COLLECTIONS.reservation_cari_odemeler),
+            where("borcId", "==", borcDoc.id)
+          );
+          const odemeSnapshot = await getDocs(odemeQuery);
+          
+          for (const odemeDoc of odemeSnapshot.docs) {
+            await deleteDoc(doc(db, COLLECTIONS.reservation_cari_odemeler, odemeDoc.id));
+          }
+          
+          // Borç kaydını sil
+          await deleteDoc(doc(db, COLLECTIONS.reservation_cari_borclar, borcDoc.id));
+          cleanedCount++;
+        }
+      }
+      
+      // Boş kalan cari kartlarını kontrol et ve sil
+      const cariQuery = query(collection(db, COLLECTIONS.reservation_cari));
+      const cariSnapshot = await getDocs(cariQuery);
+      
+      for (const cariDoc of cariSnapshot.docs) {
+        await this.checkAndDeleteEmptyCari(cariDoc.id);
+      }
+      
+      console.log(`Bakım tamamlandı: ${cleanedCount} geçersiz borç kaydı temizlendi`);
+      return cleanedCount;
+      
+    } catch (error) {
+      console.error("Bakım fonksiyonu hatası:", error);
+      throw error;
+    }
+  }
+
+  // Cari kartını manuel olarak sil (tüm ilgili kayıtlarla birlikte)
+  static async deleteCari(cariId: string): Promise<void> {
+    try {
+      const db = this.getFirestore();
+      
+      // Bu cariye ait tüm borç kayıtlarını bul ve sil
+      const borcQuery = query(
+        collection(db, COLLECTIONS.reservation_cari_borclar),
+        where("cariId", "==", cariId)
+      );
+      const borcSnapshot = await getDocs(borcQuery);
+      
+      for (const borcDoc of borcSnapshot.docs) {
+        // İlgili ödeme kayıtlarını sil
+        const odemeQuery = query(
+          collection(db, COLLECTIONS.reservation_cari_odemeler),
+          where("borcId", "==", borcDoc.id)
+        );
+        const odemeSnapshot = await getDocs(odemeQuery);
+        
+        for (const odemeDoc of odemeSnapshot.docs) {
+          await deleteDoc(doc(db, COLLECTIONS.reservation_cari_odemeler, odemeDoc.id));
+        }
+        
+        // Borç kaydını sil
+        await deleteDoc(doc(db, COLLECTIONS.reservation_cari_borclar, borcDoc.id));
+      }
+      
+      // Cari kartını sil
+      await deleteDoc(doc(db, COLLECTIONS.reservation_cari, cariId));
+
+      console.log(`Cari kartı ve tüm ilgili kayıtlar silindi: ${cariId}`);
+
+    } catch (error) {
+      console.error("Cari silme hatası:", error);
+      throw error;
+    }
+  }
+
+  // Tüm cari kartlarından genel istatistikleri hesapla
+  static async getGeneralStatistics(period: string): Promise<{
+    totalCariCount: number;
+    totalReservations: number;
+    paidReservations: number;
+    unpaidReservations: number;
+    debtorCount: number;
+    creditorCount: number;
+  }> {
+    try {
+      const db = this.getFirestore();
+      
+      // Tüm cari kartlarını getir
+      const cariList = await this.getAllCari(period);
+      
+      // Tüm borç kayıtlarını getir (bu dönem için)
+      const borcQuery = query(
+        collection(db, COLLECTIONS.reservation_cari_borclar),
+        where("period", "==", period)
+      );
+      const borcSnapshot = await getDocs(borcQuery);
+      
+      // Rezervasyon sayısını hesapla (her borç kaydı bir rezervasyonu temsil eder)
+      const totalReservations = borcSnapshot.docs.length;
+      
+      // Cari kart bazında ödeme durumunu hesapla
+      let paidCariCount = 0; // Tüm borçları ödenmiş cari kart sayısı
+      let unpaidCariCount = 0; // Borcu kalan cari kart sayısı
+      
+      console.log(`🔍 Cari Kart Bazında İstatistik Hesaplanıyor...`);
+      
+      // Her cari kart için ödeme durumunu kontrol et
+      cariList.forEach(cari => {
+        console.log(`Cari: ${cari.companyName}, Bakiye: ${cari.balance}, Toplam Borç: ${cari.totalDebt}, Toplam Ödeme: ${cari.totalPayment}`);
+        
+        // Cari kartın bakiyesine göre durumu belirle
+        // balance = totalDebt - totalPayment
+        // balance <= 0 ise tüm borçları ödenmiş demektir
+        if (cari.balance <= 0 && cari.totalDebt > 0) {
+          paidCariCount++;
+          console.log(`✅ Ödenen cari: ${cari.companyName} (Bakiye: ${cari.balance})`);
+        } else if (cari.balance > 0) {
+          unpaidCariCount++;
+          console.log(`❌ Bekleyen cari: ${cari.companyName} (Bakiye: ${cari.balance})`);
+        } else {
+          // Hiç borcu olmayan cariler (balance = 0 ve totalDebt = 0)
+          console.log(`➖ Borcu olmayan cari: ${cari.companyName}`);
+        }
+      });
+      
+      console.log(`🔍 Cari Bazında İstatistik Özeti:`);
+      console.log(`   - Toplam Cari: ${cariList.length}`);
+      console.log(`   - Ödenen Cari: ${paidCariCount}`);
+      console.log(`   - Bekleyen Cari: ${unpaidCariCount}`);
+      console.log(`   - Toplam Rezervasyon: ${totalReservations}`);
+      
+      return {
+        totalCariCount: cariList.length,
+        totalReservations,
+        paidReservations: paidCariCount, // Artık cari kart bazında
+        unpaidReservations: unpaidCariCount, // Artık cari kart bazında
+        debtorCount: cariList.filter(c => c.balance > 0).length,
+        creditorCount: cariList.filter(c => c.balance < 0).length,
+      };
+    } catch (error) {
+      console.error("Genel istatistik hesaplama hatası:", error);
+      return {
+        totalCariCount: 0,
+        totalReservations: 0,
+        paidReservations: 0,
+        unpaidReservations: 0,
+        debtorCount: 0,
+        creditorCount: 0,
+      };
     }
   }
 }

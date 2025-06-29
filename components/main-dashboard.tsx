@@ -1122,9 +1122,10 @@ export function MainDashboard({ onNavigate, financialData = [], toursData = [], 
                   
                   // Sadece gerçekten borcu olan firmalar (en az bir rezervasyonda kalan borç > 0)
                   const companiesSorted = Object.entries(companyDebts)
-                    .map(([companyName, debts]: [string, any[]]) => {
+                    .map(([companyName, debts]) => {
+                      const debtsArray = debts as any[]; // Type assertion
                       // En eski gecikme gününü bul
-                      const oldestDebt = debts.reduce((oldest: any, current: any) => {
+                      const oldestDebt = debtsArray.reduce((oldest: any, current: any) => {
                         const oldestDate = new Date(oldest.turTarihi);
                         const currentDate = new Date(current.turTarihi);
                         return currentDate < oldestDate ? current : oldest;
@@ -1143,7 +1144,7 @@ export function MainDashboard({ onNavigate, financialData = [], toursData = [], 
                       
                       return {
                         name: companyName,
-                        count: debts.length,
+                        count: debtsArray.length,
                         daysDiff,
                       };
                     })

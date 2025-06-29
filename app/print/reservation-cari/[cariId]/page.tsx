@@ -33,6 +33,29 @@ export default function ReservationCariPrintPage() {
     }
   }, [cariId]);
 
+  // Otomatik güncelleme - her 15 saniyede bir veriyi kontrol et
+  useEffect(() => {
+    if (!cariId) return;
+    
+    const autoRefreshInterval = setInterval(async () => {
+      try {
+        const [detayli, odemeler] = await Promise.all([
+          ReservationCariService.getBorcDetaylarWithReservationInfo(cariId),
+          ReservationCariService.getOdemeDetaysByCariId(cariId)
+        ]);
+        
+        // Sadece geçerli rezervasyonları göster (null olmayan)
+        const validDetayli = detayli.filter(item => item !== null);
+        setDetayliListe(validDetayli);
+        setOdemeDetaylar(odemeler);
+      } catch (error) {
+        console.error("Otomatik güncelleme hatası:", error);
+      }
+    }, 15000); // 15 saniyede bir güncelle
+
+    return () => clearInterval(autoRefreshInterval);
+  }, [cariId]);
+
   const loadCariData = async () => {
     try {
       setLoading(true);
@@ -43,7 +66,9 @@ export default function ReservationCariPrintPage() {
           ReservationCariService.getBorcDetaylarWithReservationInfo(cariId),
           ReservationCariService.getOdemeDetaysByCariId(cariId)
         ]);
-        setDetayliListe(detayli);
+        // Sadece geçerli rezervasyonları göster (null olmayan)
+        const validDetayli = detayli.filter(item => item !== null);
+        setDetayliListe(validDetayli);
         setOdemeDetaylar(odemeler);
       }
     } catch (error) {
@@ -200,7 +225,20 @@ export default function ReservationCariPrintPage() {
 
         {/* Hareket Listesi - Kısaltılmış başlıklar ve dar yükseklik */}
         <div className="mb-6">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">Rezervasyon Detayları</h2>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-bold text-gray-900">Rezervasyon Detayları</h2>
+            <div className="flex items-center gap-1 text-sm bg-gray-50 px-3 py-1 rounded-lg border">
+              <span className="text-gray-600">
+                {cari.balance > 0 ? 'Alacak:' : cari.balance < 0 ? 'Borç:' : 'Bakiye:'}
+              </span>
+              <span className={`font-bold ${cari.balance > 0 ? 'text-red-600' : cari.balance < 0 ? 'text-green-600' : 'text-gray-600'}`}>
+                {formatCurrency(Math.abs(cari.balance))}
+              </span>
+              <span className="text-gray-400 mx-2">|</span>
+              <span className="text-gray-600">Rezervasyon:</span>
+              <span className="font-bold text-blue-600">{detayliListe.length} adet</span>
+            </div>
+          </div>
           {detayliListe.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="w-full border-collapse border border-gray-300 text-xs">
