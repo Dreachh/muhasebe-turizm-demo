@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect, useCallback, useMemo } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -51,6 +51,7 @@ interface RezervasyonFormData {
   destinasyon: string;
   yetiskinSayisi: string;
   cocukSayisi: string;
+  bebekSayisi: string;
   alisSaati: string;
   musteriAdiSoyadi: string;
   telefon: string;
@@ -65,7 +66,7 @@ interface RezervasyonFormData {
   odemeDurumu: string;
   toplamTutar: string;
   odemeMiktari: string;
-  tutar: string;
+  tutar: string; // Geriye uyumluluk için
   paraBirimi: string;
   odemeTarihi: string;
   odemeNotlari: string;
@@ -88,6 +89,7 @@ const getInitialFormData = (): RezervasyonFormData => ({
   destinasyon: "",
   yetiskinSayisi: "",
   cocukSayisi: "",
+  bebekSayisi: "",
   alisSaati: "",
   musteriAdiSoyadi: "",
   telefon: "",
@@ -102,7 +104,7 @@ const getInitialFormData = (): RezervasyonFormData => ({
   odemeDurumu: "",
   toplamTutar: "",
   odemeMiktari: "",
-  tutar: "",
+  tutar: "", // Geriye uyumluluk için
   paraBirimi: "EUR",
   odemeTarihi: "",
   odemeNotlari: "",
@@ -151,13 +153,6 @@ export function RezervasyonForm({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Kalan borç hesaplaması
-  const kalanBorcMiktari = useMemo(() => {
-    const toplam = parseFloat(formData.toplamTutar) || 0;
-    const odeme = parseFloat(formData.odemeMiktari) || 0;
-    return toplam - odeme;
-  }, [formData.toplamTutar, formData.odemeMiktari]);
-
   // Form durumunu temizleme
   const clearFormStorage = useCallback(() => {
     if (typeof window !== 'undefined') {
@@ -189,6 +184,7 @@ export function RezervasyonForm({
             destinasyon: reservation.destinasyon || "",
             yetiskinSayisi: reservation.yetiskinSayisi || "",
             cocukSayisi: reservation.cocukSayisi || "",
+            bebekSayisi: reservation.bebekSayisi || "",
             alisSaati: reservation.alisSaati || "",
             musteriAdiSoyadi: reservation.musteriAdiSoyadi || "",
             telefon: reservation.telefon || "",
@@ -277,6 +273,7 @@ export function RezervasyonForm({
         destinasyon: editData.destinasyon || "",
         yetiskinSayisi: editData.yetiskinSayisi?.toString() || "0",
         cocukSayisi: editData.cocukSayisi?.toString() || "0",
+        bebekSayisi: editData.bebekSayisi?.toString() || "0",
         alisSaati: editData.alisSaati || "",
         musteriAdiSoyadi: editData.musteriAdiSoyadi || "",
         telefon: editData.telefon || "",
@@ -289,9 +286,9 @@ export function RezervasyonForm({
         odemeYapan: editData.odemeYapan || "",
         odemeYontemi: editData.odemeYontemi || "",
         odemeDurumu: editData.odemeDurumu || "",
-        toplamTutar: editData.toplamTutar?.toString() || "",
-        odemeMiktari: editData.odemeMiktari?.toString() || "",
-        tutar: editData.tutar?.toString() || "0",
+        toplamTutar: editData.toplamTutar?.toString() || editData.tutar?.toString() || "0",
+        odemeMiktari: editData.odemeMiktari?.toString() || "0",
+        tutar: editData.tutar?.toString() || "0", // Geriye uyumluluk için
         paraBirimi: editData.paraBirimi || "EUR",
         odemeTarihi: editData.odemeTarihi || "",
         odemeNotlari: editData.odemeNotlari || "",
@@ -685,7 +682,7 @@ export function RezervasyonForm({
         if (formData.odemeDurumu === "Ödendi" || 
             formData.odemeDurumu === "Kısmi Ödendi" || 
             formData.odemeDurumu === "Tamamlandı") {
-          return basicValid && !!(formData.odemeYontemi && formData.tutar && formData.odemeTarihi)
+          return basicValid && !!(formData.odemeYontemi && formData.odemeMiktari && formData.odemeTarihi)
         }
         
         return basicValid
@@ -899,6 +896,7 @@ export function RezervasyonForm({
         destinasyon: editData.destinasyon || "",
         yetiskinSayisi: editData.yetiskinSayisi || "",
         cocukSayisi: editData.cocukSayisi || "",
+        bebekSayisi: editData.bebekSayisi || "",
         alisSaati: editData.alisSaati || "",
         musteriAdiSoyadi: editData.musteriAdiSoyadi || "",
         telefon: editData.telefon || "",
@@ -916,9 +914,9 @@ export function RezervasyonForm({
         odemeYapan: editData.odemeYapan || "",
         odemeYontemi: editData.odemeYontemi || "",
         odemeDurumu: editData.odemeDurumu || "",
-        toplamTutar: editData.toplamTutar || "",
+        toplamTutar: editData.toplamTutar || editData.tutar || "",
         odemeMiktari: editData.odemeMiktari || "",
-        tutar: editData.tutar || "",
+        tutar: editData.tutar || "", // Geriye uyumluluk için
         paraBirimi: editData.paraBirimi || "EUR",
         odemeTarihi: editData.odemeTarihi || "",
         odemeNotlari: editData.odemeNotlari || "",
@@ -953,8 +951,7 @@ export function RezervasyonForm({
 
   return (
     <div className="p-6">
-      <Card className="max-w-4xl mx-auto">
-        <CardHeader>
+      <Card className="max-w-4xl mx-auto">        <CardHeader>
           <CardTitle className="flex items-center justify-between">
             {isEditMode ? "Rezervasyon Düzenle" : "Yeni Rezervasyon Girişi"}
             <div className="flex items-center gap-2">
@@ -968,16 +965,14 @@ export function RezervasyonForm({
               </span>
             </div>
           </CardTitle>
-        </CardHeader>
-        <CardContent>
+        </CardHeader><CardContent>
           {error && (
             <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
               {error}
             </div>
           )}
 
-          <form onSubmit={handleSubmit}>
-            {/* Progress Bar */}
+          <form>            {/* Progress Bar */}
             <div className="mb-6">
               <div className="flex items-start justify-between mb-2">
                 {steps.map((step) => (
@@ -1076,7 +1071,7 @@ export function RezervasyonForm({
                       onChange={(e) => handleInputChange("yetiskinSayisi", e.target.value)}
                       placeholder="0"
                     />
-                  </div><div className="space-y-2">
+                  </div>                <div className="space-y-2">
                     <Label htmlFor="cocukSayisi">Çocuk Sayısı</Label>
                     <Input
                       id="cocukSayisi"
@@ -1084,7 +1079,19 @@ export function RezervasyonForm({
                       value={formData.cocukSayisi}
                       onChange={(e) => handleInputChange("cocukSayisi", e.target.value)}
                       placeholder="0"
-                    />                  </div>
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="bebekSayisi">Bebek Sayısı</Label>
+                    <Input
+                      id="bebekSayisi"
+                      type="number"
+                      value={formData.bebekSayisi}
+                      onChange={(e) => handleInputChange("bebekSayisi", e.target.value)}
+                      placeholder="0"
+                    />
+                  </div>
                 </div>
               </div>
             )}            {/* Step 2: Müşteri & Alış Bilgileri */}
@@ -1287,99 +1294,123 @@ export function RezervasyonForm({
             )}            {/* Step 3: Ödeme */}
             {currentStep === 3 && (
               <div className="space-y-6">
-                {/* Tur Tutarı */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Tur Tutarı</CardTitle>
-                  </CardHeader>
-                  <CardContent>
+                {/* Toplam Tutar - Her durumda gösterilir */}
+                <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                  <h4 className="text-md font-medium text-blue-800 mb-3">
+                    Tur Tutarı
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="toplamTutar">Toplam Tutar <span className="text-red-500">*</span></Label>
+                      <Input
+                        id="toplamTutar"
+                        type="number"
+                        value={formData.toplamTutar || formData.tutar}
+                        onChange={(e) => {
+                          handleInputChange("toplamTutar", e.target.value);
+                          // Geriye uyumluluk için tutar alanını da güncelle
+                          handleInputChange("tutar", e.target.value);
+                        }}
+                        placeholder="0.00"
+                        step="0.01"
+                        min="0"
+                        className={!(formData.toplamTutar || formData.tutar) ? "border-red-300" : ""}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="paraBirimi">Para Birimi</Label>
+                      <Select
+                        value={formData.paraBirimi}
+                        onValueChange={(value) => handleInputChange("paraBirimi", value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Para birimi" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="EUR">Euro (€)</SelectItem>
+                          <SelectItem value="USD">Dolar ($)</SelectItem>
+                          <SelectItem value="TRY">Türk Lirası (₺)</SelectItem>
+                          <SelectItem value="GBP">Sterlin (£)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Ödeme Yapan ve Ödeme Durumu */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="odemeYapan">Kim Ödeme Yapacak/Yaptı? <span className="text-red-500">*</span></Label>
+                    <Select
+                      value={formData.odemeYapan}
+                      onValueChange={(value) => handleInputChange("odemeYapan", value)}
+                    >
+                      <SelectTrigger className={!formData.odemeYapan ? "border-red-300" : ""}>
+                        <SelectValue placeholder="Ödeme yapacak kişi/kurum" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {odemeYapanlar.map((odemeYapan) => (
+                          <SelectItem key={odemeYapan} value={odemeYapan}>
+                            {odemeYapan}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="odemeDurumu">Ödeme Durumu <span className="text-red-500">*</span></Label>
+                    <Select
+                      value={formData.odemeDurumu}
+                      onValueChange={(value) => handleInputChange("odemeDurumu", value)}
+                    >
+                      <SelectTrigger className={!formData.odemeDurumu ? "border-red-300" : ""}>
+                        <SelectValue placeholder="Ödeme durumu seçin" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {odemeDurumlari.map((odemeDurumu) => (
+                          <SelectItem key={odemeDurumu} value={odemeDurumu}>
+                            {odemeDurumu}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Ödeme Yapıldıysa Detay Bilgileri */}
+                {(formData.odemeDurumu === "Ödendi" || formData.odemeDurumu === "Kısmi Ödendi" || formData.odemeDurumu === "Tamamlandı") && (
+                  <div className="mt-4 p-4 bg-green-50 rounded-lg border border-green-200 space-y-4">
+                    <h4 className="text-md font-medium text-green-800 mb-3">
+                      Ödeme Detayları
+                    </h4>
+                    
+                    {/* Ödeme Yöntemi ve Ödeme Miktarı */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="toplamTutar">Toplam Tutar <span className="text-red-500">*</span></Label>
-                        <Input
-                          id="toplamTutar"
-                          type="number"
-                          value={formData.toplamTutar}
-                          onChange={(e) => handleInputChange("toplamTutar", e.target.value)}
-                          placeholder="0.00"
-                          step="0.01"
-                          min="0"
-                          className={!formData.toplamTutar ? "border-red-300" : ""}
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="paraBirimi">Para Birimi</Label>
+                        <Label htmlFor="odemeYontemi">Ödeme Yöntemi <span className="text-red-500">*</span></Label>
                         <Select
-                          value={formData.paraBirimi}
-                          onValueChange={(value) => handleInputChange("paraBirimi", value)}
+                          value={formData.odemeYontemi}
+                          onValueChange={(value) => handleInputChange("odemeYontemi", value)}
                         >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Para birimi" />
+                          <SelectTrigger className={!formData.odemeYontemi ? "border-red-300" : ""}>
+                            <SelectValue placeholder="Ödeme yöntemi seçin" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="EUR">Euro (€)</SelectItem>
-                            <SelectItem value="USD">Dolar ($)</SelectItem>
-                            <SelectItem value="TRY">Türk Lirası (₺)</SelectItem>
-                            <SelectItem value="GBP">Sterlin (£)</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Ödeme Bilgileri */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Ödeme Bilgileri</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {/* Ödeme Yapan ve Ödeme Durumu */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="odemeYapan">Kim Ödeme Yapacak/Yaptı? <span className="text-red-500">*</span></Label>
-                        <Select
-                          value={formData.odemeYapan}
-                          onValueChange={(value) => handleInputChange("odemeYapan", value)}
-                        >
-                          <SelectTrigger className={!formData.odemeYapan ? "border-red-300" : ""}>
-                            <SelectValue placeholder="Ödeme yapacak kişi/kurum" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {odemeYapanlar.map((odemeYapan) => (
-                              <SelectItem key={odemeYapan} value={odemeYapan}>
-                                {odemeYapan}
-                              </SelectItem>
-                            ))}
+                            <SelectItem value="Nakit">Nakit</SelectItem>
+                            <SelectItem value="Havale/EFT">Havale/EFT</SelectItem>
+                            <SelectItem value="Kredi Kartı">Kredi Kartı</SelectItem>
+                            <SelectItem value="Link ile Ödeme">Link ile Ödeme</SelectItem>
+                            <SelectItem value="Çek">Çek</SelectItem>
+                            <SelectItem value="Kredi">Kredi</SelectItem>
+                            <SelectItem value="Karma Ödeme">Karma Ödeme</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="odemeDurumu">Ödeme Durumu <span className="text-red-500">*</span></Label>
-                        <Select
-                          value={formData.odemeDurumu}
-                          onValueChange={(value) => handleInputChange("odemeDurumu", value)}
-                        >
-                          <SelectTrigger className={!formData.odemeDurumu ? "border-red-300" : ""}>
-                            <SelectValue placeholder="Ödeme durumu seçin" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {odemeDurumlari.map((odemeDurumu) => (
-                              <SelectItem key={odemeDurumu} value={odemeDurumu}>
-                                {odemeDurumu}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-
-                    {/* Ödeme Miktarı - Tüm durumlar için göster */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="odemeMiktari">Ödeme Miktarı</Label>
+                        <Label htmlFor="odemeMiktari">Ödenen Miktar <span className="text-red-500">*</span></Label>
                         <Input
                           id="odemeMiktari"
                           type="number"
@@ -1388,96 +1419,74 @@ export function RezervasyonForm({
                           placeholder="0.00"
                           step="0.01"
                           min="0"
+                          className={!formData.odemeMiktari ? "border-red-300" : ""}
                         />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="kalan">Kalan Borç</Label>
-                        <div className="p-3 bg-gray-50 border rounded-md">
-                          <span className={`font-medium ${kalanBorcMiktari > 0 ? 'text-red-600' : kalanBorcMiktari === 0 ? 'text-green-600' : 'text-blue-600'}`}>
-                            {kalanBorcMiktari > 0 
-                              ? `${kalanBorcMiktari.toFixed(2)} ${formData.paraBirimi || 'EUR'} (Eksik)` 
-                              : kalanBorcMiktari === 0 
-                                ? 'Ödendi' 
-                                : `${Math.abs(kalanBorcMiktari).toFixed(2)} ${formData.paraBirimi || 'EUR'} (Fazla)`
-                            }
-                          </span>
-                        </div>
                       </div>
                     </div>
 
-                    {/* Ödeme Yapıldıysa Detay Bilgileri */}
-                    {(formData.odemeDurumu === "Ödendi" || formData.odemeDurumu === "Kısmi Ödendi" || formData.odemeDurumu === "Tamamlandı") && (
-                      <div className="mt-4 p-4 bg-green-50 rounded-lg border border-green-200 space-y-4">
-                        <h4 className="text-md font-medium text-green-800 mb-3">
-                          Ödeme Detayları
-                        </h4>
-                        
-                        {/* Ödeme Yöntemi ve Ödeme Tarihi */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="odemeYontemi">Ödeme Yöntemi <span className="text-red-500">*</span></Label>
-                            <Select
-                              value={formData.odemeYontemi}
-                              onValueChange={(value) => handleInputChange("odemeYontemi", value)}
-                            >
-                              <SelectTrigger className={!formData.odemeYontemi ? "border-red-300" : ""}>
-                                <SelectValue placeholder="Ödeme yöntemi seçin" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {odemeYontemleri.length === 0 ? (
-                                  <>
-                                    <SelectItem value="Nakit">Nakit</SelectItem>
-                                    <SelectItem value="Havale/EFT">Havale/EFT</SelectItem>
-                                    <SelectItem value="Kredi Kartı">Kredi Kartı</SelectItem>
-                                    <SelectItem value="Link ile Ödeme">Link ile Ödeme</SelectItem>
-                                    <SelectItem value="Çek">Çek</SelectItem>
-                                    <SelectItem value="Kredi">Kredi</SelectItem>
-                                    <SelectItem value="Karma Ödeme">Karma Ödeme</SelectItem>
-                                  </>
-                                ) : (
-                                  odemeYontemleri.map((yontem) => (
-                                    <SelectItem key={yontem} value={yontem}>
-                                      {yontem}
-                                    </SelectItem>
-                                  ))
-                                )}
-                              </SelectContent>
-                            </Select>
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label htmlFor="odemeTarihi">Ödeme Tarihi <span className="text-red-500">*</span></Label>
-                            <Input
-                              id="odemeTarihi"
-                              type="date"
-                              value={formData.odemeTarihi}
-                              onChange={(e) => handleInputChange("odemeTarihi", e.target.value)}
-                              className={!formData.odemeTarihi ? "border-red-300" : ""}
-                            />
-                          </div>
+                    {/* Kalan Tutar Gösterimi */}
+                    {formData.toplamTutar && formData.odemeMiktari && (
+                      <div className="p-3 bg-white rounded border border-green-300">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-medium text-gray-700">Kalan Tutar:</span>
+                          <span className={`text-sm font-bold ${
+                            (parseFloat(formData.toplamTutar || formData.tutar || "0") - parseFloat(formData.odemeMiktari || "0")) > 0 
+                              ? "text-red-600" 
+                              : "text-green-600"
+                          }`}>
+                            {(() => {
+                              const kalan = parseFloat(formData.toplamTutar || formData.tutar || "0") - parseFloat(formData.odemeMiktari || "0");
+                              const formatted = Math.abs(kalan).toLocaleString('tr-TR', {
+                                minimumFractionDigits: 0,
+                                maximumFractionDigits: 2
+                              });
+                              const currency = formData.paraBirimi === 'EUR' ? '€' : 
+                                             formData.paraBirimi === 'USD' ? '$' : 
+                                             formData.paraBirimi === 'GBP' ? '£' : '₺';
+                              
+                              if (kalan > 0) {
+                                return `${formatted} ${currency} (Borç)`;
+                              } else if (kalan < 0) {
+                                return `${formatted} ${currency} (Fazla Ödeme)`;
+                              } else {
+                                return `0 ${currency} (Tam Ödendi)`;
+                              }
+                            })()}
+                          </span>
                         </div>
                       </div>
                     )}
 
-                    {/* Ödeme Notları - Her durumda gösterilir */}
-                    <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                      <div className="space-y-2">
-                        <Label htmlFor="odemeNotlari" className="text-blue-800 font-medium">
-                          Ödeme ile İlgili Notlar
-                        </Label>
-                        <Textarea
-                          id="odemeNotlari"
-                          value={formData.odemeNotlari || ""}
-                          onChange={(e) => handleInputChange("odemeNotlari", e.target.value)}
-                          placeholder="Ödeme ile ilgili özel notlar, ödeme koşulları, taksit bilgileri, ödeme anlaşmaları, kimden ne kadar alınacak vb."
-                          rows={3}
-                          className="bg-white"
-                        />
-                      </div>
+                    {/* Ödeme Tarihi */}
+                    <div className="space-y-2">
+                      <Label htmlFor="odemeTarihi">Ödeme Tarihi <span className="text-red-500">*</span></Label>
+                      <Input
+                        id="odemeTarihi"
+                        type="date"
+                        value={formData.odemeTarihi}
+                        onChange={(e) => handleInputChange("odemeTarihi", e.target.value)}
+                        className={!formData.odemeTarihi ? "border-red-300" : ""}
+                      />
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                )}
+
+                {/* Ödeme Notları - Her durumda gösterilir */}
+                <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="space-y-2">
+                    <Label htmlFor="odemeNotlari" className="text-gray-800 font-medium">
+                      Ödeme ile İlgili Notlar
+                    </Label>
+                    <Textarea
+                      id="odemeNotlari"
+                      value={formData.odemeNotlari || ""}
+                      onChange={(e) => handleInputChange("odemeNotlari", e.target.value)}
+                      placeholder="Ödeme ile ilgili özel notlar, ödeme koşulları, taksit bilgileri, ödeme anlaşmaları, kimden ne kadar alınacak vb."
+                      rows={3}
+                      className="bg-white"
+                    />
+                  </div>
+                </div>
               </div>
             )}
 
@@ -1512,11 +1521,12 @@ export function RezervasyonForm({
                         <div><span className="font-medium">Destinasyon:</span> {
                           destinasyonlar.find(dest => dest.id === formData.destinasyon)?.name || formData.destinasyon || "-"
                         }</div>
-                        <div><span className="font-medium">Katılımcı Sayısı:</span> {Number(formData.yetiskinSayisi || 0) + Number(formData.cocukSayisi || 0)} kişi</div>
+                        <div><span className="font-medium">Katılımcı Sayısı:</span> {Number(formData.yetiskinSayisi || 0) + Number(formData.cocukSayisi || 0) + Number(formData.bebekSayisi || 0)} kişi</div>
                       </div>
                       <div className="space-y-1">
                         <div><span className="font-medium">Yetişkin:</span> {formData.yetiskinSayisi || 0}</div>
                         <div><span className="font-medium">Çocuk:</span> {formData.cocukSayisi || 0}</div>
+                        <div><span className="font-medium">Bebek:</span> {formData.bebekSayisi || 0}</div>
                       </div>
                     </div>
                   </CardContent>
@@ -1581,7 +1591,24 @@ export function RezervasyonForm({
                         {(formData.odemeDurumu === "Ödendi" || formData.odemeDurumu === "Kısmi Ödendi" || formData.odemeDurumu === "Tamamlandı") && (
                           <div><span className="font-medium">Ödeme Yöntemi:</span> {formData.odemeYontemi || "-"}</div>
                         )}
-                        <div><span className="font-medium">Toplam Tutar:</span> {formData.tutar || "-"} {formData.paraBirimi}</div>
+                        <div><span className="font-medium">Toplam Tutar:</span> {formData.toplamTutar || formData.tutar || "-"} {formData.paraBirimi}</div>
+                        {formData.odemeMiktari && (
+                          <div><span className="font-medium">Ödenen Miktar:</span> {formData.odemeMiktari} {formData.paraBirimi}</div>
+                        )}
+                        {(formData.toplamTutar || formData.tutar) && formData.odemeMiktari && (
+                          <div><span className="font-medium">Kalan Tutar:</span> 
+                            <span className={
+                              (parseFloat(formData.toplamTutar || formData.tutar || "0") - parseFloat(formData.odemeMiktari || "0")) > 0 
+                                ? "text-red-600 font-bold" 
+                                : "text-green-600 font-bold"
+                            }>
+                              {Math.abs(parseFloat(formData.toplamTutar || formData.tutar || "0") - parseFloat(formData.odemeMiktari || "0")).toLocaleString('tr-TR', {
+                                minimumFractionDigits: 0,
+                                maximumFractionDigits: 2
+                              })} {formData.paraBirimi}
+                            </span>
+                          </div>
+                        )}
                       </div>
                       <div className="space-y-1">
                         {(formData.odemeDurumu === "Ödendi" || formData.odemeDurumu === "Kısmi Ödendi" || formData.odemeDurumu === "Tamamlandı") && formData.odemeTarihi && (
