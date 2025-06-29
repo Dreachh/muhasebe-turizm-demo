@@ -26,6 +26,7 @@ import {
   updateReservation
 } from "@/lib/db"
 import { getDestinations, getReservationDestinations } from "@/lib/db-firebase"
+import { ReservationCariService } from "@/lib/reservation-cari-service" // Rezervasyon Cari Servisi
 
 // Katılımcı interface'i - Sadece gerekli alanları tut
 interface Katilimci {
@@ -748,6 +749,87 @@ export function RezervasyonForm({
         }
 
         console.log('Rezervasyon başarıyla kaydedildi/güncellendi');
+
+        // Rezervasyon cari oluşturma (sadece yeni rezervasyon için)
+        if (!isEditMode && formData.firma && (formData.toplamTutar || formData.tutar)) {
+          try {
+            const currentYear = new Date().getFullYear().toString();
+            
+            // Rezervasyon verilerini hazırla
+            const reservationForCari = {
+              id: seriNumarasi, // Seri numarası rezervasyon ID olarak kullanılıyor
+              seriNumarasi: seriNumarasi,
+              firma: formData.firma,
+              telefonKisi: formData.yetkiliKisi,
+              yetkiliTelefon: formData.yetkiliTelefon,
+              yetkiliEmail: formData.yetkiliEmail,
+              turTarihi: turTarihi,
+              toplamTutar: formData.toplamTutar || formData.tutar,
+              odemeMiktari: formData.odemeMiktari || "0",
+              odemeTarihi: formData.odemeTarihi,
+              destinasyon: formData.destinasyon,
+              destinasyonId: formData.destinasyon, // Her iki alan da eklendi
+              musteriAdiSoyadi: formData.musteriAdiSoyadi,
+              yetiskinSayisi: formData.yetiskinSayisi,
+              cocukSayisi: formData.cocukSayisi,
+              bebekSayisi: formData.bebekSayisi,
+              alisYeri: formData.alisYeri,
+              alisSaati: formData.alisSaati,
+              paraBirimi: formData.paraBirimi,
+              period: currentYear,
+            };
+
+            console.log('Rezervasyon formu - Cari için hazırlanan veri:', reservationForCari);
+            
+            await ReservationCariService.createBorcFromReservation(reservationForCari);
+            console.log('Rezervasyon cari kartı başarıyla oluşturuldu');
+            
+          } catch (cariError) {
+            console.error("Rezervasyon cari oluşturulurken hata:", cariError);
+            // Cari oluşturma hatası rezervasyon kaydını etkilemesin
+          }
+        } else {
+          console.log('Cari oluşturma atlandı. İsEditMode:', isEditMode, 'Firma:', formData.firma, 'Tutar:', formData.toplamTutar || formData.tutar);
+        }
+
+        // Düzenleme modunda da cari güncelle (varsa)
+        if (isEditMode && formData.firma && (formData.toplamTutar || formData.tutar)) {
+          try {
+            const currentYear = new Date().getFullYear().toString();
+            
+            const reservationForCari = {
+              id: originalReservationId, // Düzenlenen rezervasyonun ID'si
+              seriNumarasi: seriNumarasi,
+              firma: formData.firma,
+              telefonKisi: formData.yetkiliKisi,
+              yetkiliTelefon: formData.yetkiliTelefon,
+              yetkiliEmail: formData.yetkiliEmail,
+              turTarihi: turTarihi,
+              toplamTutar: formData.toplamTutar || formData.tutar,
+              odemeMiktari: formData.odemeMiktari || "0",
+              odemeTarihi: formData.odemeTarihi,
+              destinasyon: formData.destinasyon,
+              destinasyonId: formData.destinasyon,
+              musteriAdiSoyadi: formData.musteriAdiSoyadi,
+              yetiskinSayisi: formData.yetiskinSayisi,
+              cocukSayisi: formData.cocukSayisi,
+              bebekSayisi: formData.bebekSayisi,
+              alisYeri: formData.alisYeri,
+              alisSaati: formData.alisSaati,
+              paraBirimi: formData.paraBirimi,
+              period: currentYear,
+            };
+
+            console.log('Rezervasyon düzenlendi - Cari güncelleniyor:', reservationForCari);
+            
+            // Cari güncelleme için özel fonksiyon çağır
+            await ReservationCariService.updateCariFromReservation(reservationForCari);
+            console.log('Rezervasyon düzenlemesi cari kartına yansıtıldı');
+            
+          } catch (cariError) {
+            console.error("Rezervasyon cari güncelleme hatası:", cariError);
+          }
+        }
 
         // ÖNEMLİ: Sadece başarılı kayıttan sonra localStorage'ı temizle
         clearFormStorage();

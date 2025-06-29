@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Home, Calendar, DollarSign, BarChart2, Settings, Database, RefreshCw, Globe, Save, Building, CreditCard, Receipt } from "lucide-react"
+import { Home, Calendar, DollarSign, BarChart2, Settings, Database, RefreshCw, Globe, Save, Building, CreditCard, Receipt, Building2 } from "lucide-react"
 
 export function MainMenu({ onNavigate }: { onNavigate: (id: string) => void }) {
   const menuItems = [
@@ -43,6 +43,12 @@ export function MainMenu({ onNavigate }: { onNavigate: (id: string) => void }) {
       label: "Ödemeler",
       icon: <CreditCard className="h-6 w-6" />,
       color: "bg-emerald-100 text-emerald-700",
+    },
+    {
+      id: "reservation-cari",
+      label: "Rezervasyon Cari",
+      icon: <Building2 className="h-6 w-6" />,
+      color: "bg-orange-100 text-orange-700",
     },
     {
       id: "currency",

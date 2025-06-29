@@ -32,6 +32,7 @@ import DebtManagement from "../components/debt-management" // Yeni: Borç yönet
 import PaymentManagement from "../components/payment-management" // Yeni: Ödeme yönetimi
 import { CurrencyView } from "../components/currency-view" // Döviz görünümü
 import { PeriodDataView } from "../components/period-data-view" // Yeni: Dönem Verileri görünümü
+import ReservationCariKartlariEnhanced from "../components/reservation-cari-kartlari-enhanced" // Enhanced Rezervasyon Cari Kartları
 import { createCustomerDebtsFromTour } from "@/lib/debt-service";
 import { RezervasyonForm } from "@/components/rezervasyon/rezervasyon-form";
 import { RezervasyonListe } from "../components/rezervasyon/rezervasyon-liste" // Rezervasyon liste
@@ -820,6 +821,9 @@ export default function Home() {  const [currentView, setCurrentView] = useState
           )}
           {currentView === "currency" && (
             <CurrencyView onClose={() => setCurrentView("dashboard")} />
+          )}
+          {currentView === "reservation-cari" && (
+            <ReservationCariKartlariEnhanced period={new Date().getFullYear().toString()} />
           )}
           {/* Rezervasyon Sistemi */}
           {currentView === "rezervasyon-form" && (

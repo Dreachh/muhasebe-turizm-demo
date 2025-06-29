@@ -61,6 +61,12 @@ export const COLLECTIONS = {  // Ana veri koleksiyonları
   pickupTypes: "pickupTypes",
   referenceSources: "referenceSources",
   
+  // Rezervasyon cari koleksiyonları
+  reservation_cari: "reservation_cari",
+  reservation_cari_payments: "reservation_cari_payments",
+  reservation_cari_borclar: "reservation_cari_borclar",
+  reservation_cari_odemeler: "reservation_cari_odemeler",
+  
   // DEPRECATED: Aşağıdaki koleksiyonlar artık kullanılmıyor
   // Bunları Firebase'den manuel olarak silin:
   // - masraflar (expenses kullanılıyor)
