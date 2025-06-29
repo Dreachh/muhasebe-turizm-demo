@@ -382,6 +382,21 @@ export function RezervasyonListe({
     return `${formatted} ${currency}`;
   }
 
+  // Toplam katılımcı sayısını hesapla
+  const getTotalParticipants = () => {
+    return filteredReservations.reduce((totals, reservation) => {
+      const yetiskin = parseInt(reservation.yetiskinSayisi?.toString() || "0");
+      const cocuk = parseInt(reservation.cocukSayisi?.toString() || "0");
+      const bebek = parseInt(reservation.bebekSayisi?.toString() || "0");
+      
+      totals.yetiskin += yetiskin;
+      totals.cocuk += cocuk;
+      totals.bebek += bebek;
+      
+      return totals;
+    }, { yetiskin: 0, cocuk: 0, bebek: 0 });
+  }
+
   if (isLoading) {
     return (
       <div className="container mx-auto p-6">
@@ -428,103 +443,163 @@ export function RezervasyonListe({
 
       {/* Filters */}
       <Card className="mb-6 print:hidden">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Filter className="h-5 w-5" />
-            Filtreler
-          </CardTitle>
-          <CardDescription>Rezervasyonları filtrelemek için aşağıdaki seçenekleri kullanın</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Arama</label>
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="Misafir adı veya telefon..."
-                  className="pl-10"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
+        <CardContent className="pt-6">
+          <div className="flex gap-6 items-stretch">
+            {/* Sol taraf - Filtreler */}
+            <div className="flex-1">
+              {/* Başlık */}
+              <div className="mb-4">
+                <h3 className="text-lg font-semibold flex items-center gap-2">
+                  <Filter className="h-5 w-5" />
+                  Filtreler
+                </h3>
+                <p className="text-sm text-gray-600 mt-1">Rezervasyonları filtrelemek için aşağıdaki seçenekleri kullanın</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Arama</label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                    <Input
+                      placeholder="Misafir adı veya telefon..."
+                      className="pl-10"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Destinasyon</label>
+                  <Select value={filter} onValueChange={setFilter}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ornekDestinasyonlar.map((dest) => (
+                        <SelectItem key={dest} value={dest}>
+                          {dest}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Acenta</label>
+                  <Select value={selectedAgency} onValueChange={setSelectedAgency}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ornekAcentalar.map((agency) => (
+                        <SelectItem key={agency} value={agency}>
+                          {agency}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Ödeme Durumu</label>
+                  <Select value={selectedPaymentStatus} onValueChange={setSelectedPaymentStatus}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {odemeDurumlari.map((status) => (
+                        <SelectItem key={status} value={status}>
+                          {status}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="flex gap-4">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4" />
+                      <span>
+                        {dateRange?.from ? 
+                          (dateRange.to ? `${format(dateRange.from, "dd MMM")} - ${format(dateRange.to, "dd MMM")}` : format(dateRange.from, "dd MMM yyyy"))
+                          : "Tarih Aralığı Seç"}
+                      </span>
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <CalendarComponent mode="range" selected={dateRange} onSelect={setDateRange} numberOfMonths={2} />
+                  </PopoverContent>
+                </Popover>
+
+                <Button onClick={handlePrintForDriver} className="bg-blue-600 hover:bg-blue-700">
+                  <Printer className="h-4 w-4 mr-2" />
+                  Şöför Listesi
+                </Button>
+                
+                <Button onClick={handlePrintForAdmin} className="bg-green-600 hover:bg-green-700">
+                  <Printer className="h-4 w-4 mr-2" />
+                  Detaylı Liste
+                </Button>
               </div>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Destinasyon</label>
-              <Select value={filter} onValueChange={setFilter}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {ornekDestinasyonlar.map((dest) => (
-                    <SelectItem key={dest} value={dest}>
-                      {dest}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            {/* Sağ taraf - Toplam Katılımcı Sayısı Kartı */}
+            <div className="w-48 flex-shrink-0 flex items-stretch justify-end">
+              <Card className="bg-gradient-to-br from-blue-50 to-indigo-100 border-blue-200 w-full flex flex-col">
+                <CardHeader className="pb-2 px-4 py-3 text-center">
+                  <CardTitle className="text-sm font-bold text-blue-800 flex items-center justify-center gap-2">
+                    <Users className="h-4 w-4" />
+                    Toplam Katılımcı
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0 px-4 pb-4 flex-1 flex flex-col justify-center">
+                  {(() => {
+                    // Filtrelenmiş rezervasyonların toplam katılımcı sayısını hesapla
+                    const globalTotalStats = filteredReservations.reduce((acc, reservation) => {
+                      acc.yetiskin += parseInt(reservation.yetiskinSayisi?.toString() || "0");
+                      acc.cocuk += parseInt(reservation.cocukSayisi?.toString() || "0");
+                      acc.bebek += parseInt(reservation.bebekSayisi?.toString() || "0");
+                      return acc;
+                    }, { yetiskin: 0, cocuk: 0, bebek: 0 });
+
+                    const toplam = globalTotalStats.yetiskin + globalTotalStats.cocuk + globalTotalStats.bebek;
+                    
+                    return (
+                      <div className="space-y-3 w-full">
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-blue-600">{toplam}</div>
+                          <div className="text-sm text-gray-600">toplam kişi</div>
+                        </div>
+                        
+                        <div className="grid grid-cols-3 gap-1 text-center">
+                          <div className="bg-white rounded-lg p-1.5 shadow-sm min-h-[50px] flex flex-col justify-center">
+                            <div className="text-base font-bold text-green-600 leading-tight">{globalTotalStats.yetiskin}</div>
+                            <div className="text-[10px] text-gray-500 leading-tight">Yetişkin</div>
+                          </div>
+                          <div className="bg-white rounded-lg p-1.5 shadow-sm min-h-[50px] flex flex-col justify-center">
+                            <div className="text-base font-bold text-orange-600 leading-tight">{globalTotalStats.cocuk}</div>
+                            <div className="text-[10px] text-gray-500 leading-tight">Çocuk</div>
+                          </div>
+                          <div className="bg-white rounded-lg p-1.5 shadow-sm min-h-[50px] flex flex-col justify-center">
+                            <div className="text-base font-bold text-purple-600 leading-tight">{globalTotalStats.bebek}</div>
+                            <div className="text-[10px] text-gray-500 leading-tight">Bebek</div>
+                          </div>
+                        </div>
+                        
+                        <div className="text-center text-sm text-gray-600">
+                          {filteredReservations.length} rezervasyon
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </CardContent>
+              </Card>
             </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Acenta</label>
-              <Select value={selectedAgency} onValueChange={setSelectedAgency}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {ornekAcentalar.map((agency) => (
-                    <SelectItem key={agency} value={agency}>
-                      {agency}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Ödeme Durumu</label>
-              <Select value={selectedPaymentStatus} onValueChange={setSelectedPaymentStatus}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {odemeDurumlari.map((status) => (
-                    <SelectItem key={status} value={status}>
-                      {status}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="flex gap-4">
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4" />
-                  <span>
-                    {dateRange?.from ? 
-                      (dateRange.to ? `${format(dateRange.from, "dd MMM")} - ${format(dateRange.to, "dd MMM")}` : format(dateRange.from, "dd MMM yyyy"))
-                      : "Tarih Aralığı Seç"}
-                  </span>
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <CalendarComponent mode="range" selected={dateRange} onSelect={setDateRange} numberOfMonths={2} />
-              </PopoverContent>
-            </Popover>
-
-            <Button onClick={handlePrintForDriver} className="bg-blue-600 hover:bg-blue-700">
-              <Printer className="h-4 w-4 mr-2" />
-              Şöför Listesi
-            </Button>
-            
-            <Button onClick={handlePrintForAdmin} className="bg-green-600 hover:bg-green-700">
-              <Printer className="h-4 w-4 mr-2" />
-              Detaylı Liste
-            </Button>
           </div>
         </CardContent>
       </Card>      {/* Print Content Container */}
@@ -552,7 +627,22 @@ export function RezervasyonListe({
           <div className="text-center">
             <h1 className="text-2xl font-bold text-gray-900 mb-2">REZERVASYON LİSTESİ</h1>
             <div className="text-sm text-gray-600 space-y-1">
-              <p>Toplam {filteredReservations.length} rezervasyon</p>
+              {(() => {
+                // Tüm filtrelenmiş rezervasyonların toplam katılımcı sayısını hesapla
+                const globalTotalStats = filteredReservations.reduce((acc, reservation) => {
+                  acc.yetiskin += parseInt(reservation.yetiskinSayisi?.toString() || "0");
+                  acc.cocuk += parseInt(reservation.cocukSayisi?.toString() || "0");
+                  acc.bebek += parseInt(reservation.bebekSayisi?.toString() || "0");
+                  return acc;
+                }, { yetiskin: 0, cocuk: 0, bebek: 0 });
+                
+                return (
+                  <div>
+                    <p>Toplam {filteredReservations.length} rezervasyon</p>
+                    <p className="font-medium text-blue-600">Toplam Katılımcı: {globalTotalStats.yetiskin}Y {globalTotalStats.cocuk}Ç {globalTotalStats.bebek}B</p>
+                  </div>
+                );
+              })()}
               {dateRange?.from && (
                 <p>
                   Tarih Aralığı: {format(dateRange.from, "dd MMM yyyy", { locale: tr })}

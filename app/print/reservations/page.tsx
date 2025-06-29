@@ -201,9 +201,23 @@ export default function PrintReservationsPage() {
           {/* Orta: Başlık ve Rezervasyon Sayısı */}
           <div className="flex-1 flex flex-col items-center">
             <h1 className="text-xl font-bold text-gray-900 leading-tight text-center">REZERVASYON LİSTESİ</h1>
-            {printData && printData.reservations && (
-              <span className="text-sm text-gray-700">Toplam {printData.reservations.length} rezervasyon</span>
-            )}
+            {printData && printData.reservations && (() => {
+              // Tüm rezervasyonların toplam katılımcı sayısını hesapla
+              const globalTotalStats = printData.reservations.reduce((acc, reservation) => {
+                acc.yetiskin += parseInt(reservation.yetiskinSayisi?.toString() || "0");
+                acc.cocuk += parseInt(reservation.cocukSayisi?.toString() || "0");
+                acc.bebek += parseInt(reservation.bebekSayisi?.toString() || "0");
+                return acc;
+              }, { yetiskin: 0, cocuk: 0, bebek: 0 });
+              
+              return (
+                <div className="text-sm text-gray-700 text-center">
+                  <span>Toplam {printData.reservations.length} rezervasyon</span>
+                  <span className="mx-2">•</span>
+                  <span className="font-medium">Toplam Katılımcı: {globalTotalStats.yetiskin}Y {globalTotalStats.cocuk}Ç {globalTotalStats.bebek}B</span>
+                </div>
+              );
+            })()}
           </div>
           {/* Sağ: Tarih ve Saat */}
           <div style={{ minWidth: 120, textAlign: 'right' }}>
@@ -302,19 +316,9 @@ export default function PrintReservationsPage() {
                               ✓ {reservation.odemeYapan || 'TAM'}
                             </span>
                           ) : (
-                            <div className="flex flex-col items-center justify-center text-[9px] leading-tight w-full">
-                              <span className="font-medium truncate w-full text-center">
-                                {reservation.odemeYapan || '-'}
-                              </span>
-                              {(reservation.odemeMiktari || reservation.odenen) && (
-                                <span className="text-blue-600 font-bold truncate w-full text-center">
-                                  {formatCurrency(
-                                    reservation.odemeMiktari || reservation.odenen || 0, 
-                                    reservation.paraBirimi || 'TRY'
-                                  )}
-                                </span>
-                              )}
-                            </div>
+                            <span className="text-[9px] font-medium truncate">
+                              {reservation.odemeYapan || '-'}{(reservation.odemeMiktari || reservation.odenen) ? ` / ${formatCurrency(reservation.odemeMiktari || reservation.odenen || 0, reservation.paraBirimi || 'TRY')}` : ''}
+                            </span>
                           )}
                         </div>
                       </TableCell>
