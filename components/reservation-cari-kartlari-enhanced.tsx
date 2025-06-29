@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -59,7 +59,7 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
     borclar: any[];
     odemeler: ReservationOdemeDetay[];
     detayliListe: any[];
-  }}>({});
+  }}>({})
   const [availableCompanies, setAvailableCompanies] = useState<any[]>([]);
   const [destinations, setDestinations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -101,6 +101,16 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
   useEffect(() => {
     filterCariList();
   }, [cariList, searchTerm, filterType]);
+
+  // Toplam değerleri hesapla
+  const totals = useMemo(() => {
+    return cariList.reduce((acc, cari) => {
+      acc.totalDebt += cari.totalDebt || 0;
+      acc.totalPayment += cari.totalPayment || 0;
+      acc.totalBalance += cari.balance || 0;
+      return acc;
+    }, { totalDebt: 0, totalPayment: 0, totalBalance: 0 });
+  }, [cariList]);
 
   const loadAvailableCompanies = async () => {
     try {
@@ -454,7 +464,7 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
   }
 
   return (
-    <div className="space-y-6">
+    <div className="container mx-auto px-4 py-6 space-y-6 max-w-7xl">
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
@@ -569,38 +579,104 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
         </div>
       </div>
 
-      {/* Arama ve Filtreleme */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex gap-4 items-end">
-            <div className="flex-1">
-              <Label>Cari Ara</Label>
-              <div className="relative">
-                <Search className="absolute left-2 top-2.5 w-4 h-4 text-gray-500" />
-                <Input
-                  placeholder="Firma adı, kişi veya telefon..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-8"
-                />
+      {/* Arama ve Filtreleme + İstatistik Kartları */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Sol Taraf - Arama ve Filtreleme */}
+        <div className="lg:col-span-1">
+          <Card className="h-full">
+            <CardContent className="pt-6 h-full">
+              <div className="flex items-end gap-3 h-full">
+                <div className="flex-1">
+                  <Label>Cari Ara</Label>
+                  <div className="relative">
+                    <Search className="absolute left-2 top-2.5 w-4 h-4 text-gray-500" />
+                    <Input
+                      placeholder="Firma adı, kişi veya telefon..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-8"
+                    />
+                  </div>
+                </div>
+                <div className="w-28">
+                  <Label className="text-xs">Filtre</Label>
+                  <Select value={filterType} onValueChange={(value: any) => setFilterType(value)}>
+                    <SelectTrigger className="text-xs h-10">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Tümü ({cariList.length})</SelectItem>
+                      <SelectItem value="debt">Borçlular ({cariList.filter(c => c.balance > 0).length})</SelectItem>
+                      <SelectItem value="credit">Alacaklılar ({cariList.filter(c => c.balance < 0).length})</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-            </div>
-            <div className="w-48">
-              <Label>Filtre</Label>
-              <Select value={filterType} onValueChange={(value: any) => setFilterType(value)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tümü ({cariList.length})</SelectItem>
-                  <SelectItem value="debt">Borçlular ({cariList.filter(c => c.balance > 0).length})</SelectItem>
-                  <SelectItem value="credit">Alacaklılar ({cariList.filter(c => c.balance < 0).length})</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Sağ Taraf - İstatistik Kartları */}
+        <div className="lg:col-span-2">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Toplam Borç */}
+            <Card className="border-l-4 border-l-red-500">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-red-600">Toplam Borç</p>
+                    <p className="text-2xl font-bold text-red-700">
+                      €{totals.totalDebt.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                  <div className="p-3 bg-red-100 rounded-full">
+                    <CreditCard className="w-6 h-6 text-red-600" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Toplam Ödeme */}
+            <Card className="border-l-4 border-l-green-500">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-green-600">Toplam Ödeme</p>
+                    <p className="text-2xl font-bold text-green-700">
+                      €{totals.totalPayment.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                  <div className="p-3 bg-green-100 rounded-full">
+                    <Euro className="w-6 h-6 text-green-600" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Net Bakiye */}
+            <Card className={`border-l-4 ${totals.totalBalance >= 0 ? 'border-l-orange-500' : 'border-l-blue-500'}`}>
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className={`text-sm font-medium ${totals.totalBalance >= 0 ? 'text-orange-600' : 'text-blue-600'}`}>
+                      Net Bakiye
+                    </p>
+                    <p className={`text-2xl font-bold ${totals.totalBalance >= 0 ? 'text-orange-700' : 'text-blue-700'}`}>
+                      €{Math.abs(totals.totalBalance).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
+                    </p>
+                    <p className={`text-xs ${totals.totalBalance >= 0 ? 'text-orange-500' : 'text-blue-500'}`}>
+                      {totals.totalBalance >= 0 ? 'Alacak' : 'Borç'}
+                    </p>
+                  </div>
+                  <div className={`p-3 ${totals.totalBalance >= 0 ? 'bg-orange-100' : 'bg-blue-100'} rounded-full`}>
+                    <Building2 className={`w-6 h-6 ${totals.totalBalance >= 0 ? 'text-orange-600' : 'text-blue-600'}`} />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Cari Kartları - Enhanced Style */}
       <div className="space-y-3">

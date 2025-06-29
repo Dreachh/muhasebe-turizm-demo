@@ -667,9 +667,9 @@ export function MainDashboard({ onNavigate, financialData = [], toursData = [], 
   const getStatusBadge = (status: string) => {
     const statusConfig = {
       "Ödendi": "bg-green-100 text-green-800 text-[8px] px-1 py-0.5 h-4 text-center",
-      "Bekliyor": "bg-yellow-100 text-yellow-800 text-xs px-2 py-1", 
-      "Kısmi Ödendi": "bg-blue-100 text-blue-800 text-xs px-2 py-1",
-      "İptal": "bg-red-100 text-red-800 text-xs px-2 py-1"
+      "Bekliyor": "bg-yellow-100 text-yellow-800 text-[8px] px-1 py-0.5 h-4 text-center", 
+      "Kısmi Ödendi": "bg-blue-100 text-blue-800 text-[8px] px-1 py-0.5 h-4 text-center whitespace-nowrap",
+      "İptal": "bg-red-100 text-red-800 text-[8px] px-1 py-0.5 h-4 text-center"
     } as const
     
     const className = statusConfig[status as keyof typeof statusConfig] || statusConfig["Bekliyor"]
@@ -1100,7 +1100,7 @@ export function MainDashboard({ onNavigate, financialData = [], toursData = [], 
                               <div className="text-xs text-gray-500 leading-tight">{reservation.yetkiliKisi}</div>
                             </div>
                           </TableCell>                          <TableCell className="border-r border-gray-200 align-top py-1 px-1 leading-tight" style={{width: '85px'}}>
-                            <div className="space-y-1 text-center">
+                            <div className="space-y-0.5 text-center">
                               {getStatusBadge(reservation.odemeDurumu)}
                               <div className="text-xs text-gray-500 leading-tight">
                                 {(reservation.odemeYapan || reservation.odemeYontemi) && (
@@ -1619,7 +1619,7 @@ export function MainDashboard({ onNavigate, financialData = [], toursData = [], 
                             {/* KALAN ÖDEME */}
                             <td className="py-1 sm:py-2 px-1 sm:px-3">
                               {transaction.status === "completed" ? (
-                                <span className="text-green-600 font-semibold text-xs sm:text-sm">Ödendi</span>
+                                <span className="text-green-600 font-semibold text-[10px]">Ödendi</span>
                               ) : (
                                 (() => {
                                   // Toplam tutarları hesapla
@@ -1670,7 +1670,7 @@ export function MainDashboard({ onNavigate, financialData = [], toursData = [], 
                                   
                                   // Hiç kalan yoksa "Ödendi" göster (kalan bir şey yoksa ödenmişdemektir)
                                   if (Object.keys(remaining).length === 0) {
-                                    return <span className="text-green-600 font-semibold text-xs sm:text-sm">Ödendi</span>;
+                                    return <span className="text-green-600 font-semibold text-[10px]">Ödendi</span>;
                                   }
                                   
                                   // Sonuç formatını döndür

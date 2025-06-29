@@ -67,6 +67,10 @@ export function RezervasyonListe({
     } as const
     
     const className = statusConfig[status as keyof typeof statusConfig] || statusConfig["Bekliyor"]
+    // Kısmi Ödendi için daha küçük stil
+    if (status === "Kısmi Ödendi") {
+      return <Badge className={`${className} text-[8px] px-1 py-0 h-3 leading-none whitespace-nowrap`}>{status}</Badge>
+    }
     return <Badge className={`${className} text-[8px] px-0.5 py-0 h-3 leading-none`}>{status}</Badge>
   }
   const [groupedReservations, setGroupedReservations] = useState<{ [key: string]: any[] }>({});
