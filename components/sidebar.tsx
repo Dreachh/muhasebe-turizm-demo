@@ -65,9 +65,13 @@ export function Sidebar({ currentView, onNavigate }: SidebarProps) {
               <BookOpen className="h-4 w-4 shrink-0" />
               {!collapsed && <span className="ml-2 text-left block w-full">Rezervasyon Girişi</span>}
             </Button>
-            <Button variant="ghost" className={`w-full justify-start items-center text-left px-2 py-2 border-b border-black ${currentView === "rezervasyon-liste" ? "bg-[#00a1c6] text-white" : "text-gray-700 hover:bg-gray-100"}`} onClick={() => onNavigate("rezervasyon-liste")}>
+            <Button variant="ghost" className={`w-full justify-start items-center text-left px-2 py-2 ${currentView === "rezervasyon-liste" ? "bg-[#00a1c6] text-white" : "text-gray-700 hover:bg-gray-100"}`} onClick={() => onNavigate("rezervasyon-liste")}>
               <Database className="h-4 w-4 shrink-0" />
               {!collapsed && <span className="ml-2 text-left block w-full">Rezervasyon Listesi</span>}
+            </Button>
+            <Button variant="ghost" className={`w-full justify-start items-center text-left px-2 py-2 border-b border-black ${currentView === "reservation-cari" ? "bg-[#00a1c6] text-white" : "text-gray-700 hover:bg-gray-100"}`} onClick={() => onNavigate("reservation-cari")}>
+              <Building2 className="h-4 w-4 shrink-0" />
+              {!collapsed && <span className="ml-2 text-left block w-full">Rezervasyon Cari</span>}
             </Button>
             <Button variant="ghost" className={`w-full justify-start items-center text-left px-2 py-2 ${currentView === "tour-sales" ? "bg-[#00a1c6] text-white" : "text-gray-700 hover:bg-gray-100"}`} onClick={() => onNavigate("tour-sales")}>
               <Globe className="h-4 w-4 shrink-0" />
@@ -84,10 +88,6 @@ export function Sidebar({ currentView, onNavigate }: SidebarProps) {
             <Button variant="ghost" className={`w-full justify-start items-center text-left px-2 py-2 ${currentView === "debts" ? "bg-[#00a1c6] text-white" : "text-gray-700 hover:bg-gray-100"}`} onClick={() => onNavigate("debts")}> 
               <Receipt className="h-4 w-4 shrink-0" />
               {!collapsed && <span className="ml-2 text-left block w-full">Borçlar</span>}
-            </Button>
-            <Button variant="ghost" className={`w-full justify-start items-center text-left px-2 py-2 ${currentView === "reservation-cari" ? "bg-[#00a1c6] text-white" : "text-gray-700 hover:bg-gray-100"}`} onClick={() => onNavigate("reservation-cari")}>
-              <Building2 className="h-4 w-4 shrink-0" />
-              {!collapsed && <span className="ml-2 text-left block w-full">Rezervasyon Cari</span>}
             </Button>
             <Button variant="ghost" className={`w-full justify-start items-center text-left px-2 py-2 border-b border-black ${currentView === "period-data" ? "bg-[#00a1c6] text-white" : "text-gray-700 hover:bg-gray-100"}`} onClick={() => onNavigate("period-data")}>
               <BarChart2 className="h-4 w-4 shrink-0" />

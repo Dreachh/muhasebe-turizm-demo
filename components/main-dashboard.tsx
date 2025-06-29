@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { DollarSign, Users, Calendar, Globe, FileText, BarChart2, Settings, Save, BookOpen, MapPin, Clock, Phone } from "lucide-react"
+import { DollarSign, Users, Calendar, Globe, FileText, BarChart2, Settings, Save, BookOpen, MapPin, Clock, Phone, Building2 } from "lucide-react"
 import { formatCurrency, formatCurrencyGroups, calculateTourExpenses, calculateTourTotals, calculateTourProfit } from "@/lib/data-utils"
 import { Button } from "@/components/ui/button"
 import { DatePickerWithRange } from "@/components/ui/date-range-picker"
@@ -801,25 +801,49 @@ export function MainDashboard({ onNavigate, financialData = [], toursData = [], 
           </CardContent>
         </Card>
 
-        {/* Toplam Tur Satışı - Bu kart tur verilerini kullanıyor */}
-        <Card className="border-l-4 border-l-blue-500 cursor-pointer hover:shadow-md transition-shadow" onClick={() => onNavigate("data-view")}>
-          <CardContent className="pt-3 pb-4 sm:pb-6 px-3 sm:px-4 relative">
-            <div className="flex flex-col items-start justify-start pt-0">
-              <div>
-                <div className="flex items-center space-x-2 mb-2">
-                  <span className="bg-blue-100 p-1.5 sm:p-2 rounded-full flex-shrink-0"><Users className="h-3 w-3 sm:h-4 sm:w-4 text-blue-500" /></span>
-                  <div className="min-w-0">
-                    <h3 className="text-xs sm:text-sm font-bold text-muted-foreground text-left whitespace-nowrap">Toplam</h3>
-                    <p className="text-xs font-normal text-muted-foreground -mt-0.5 whitespace-nowrap">Tur Satışı</p>
+        {/* Toplam Tur Satışı - Bu kart tur verilerini kullanıyor - Yükseklik diğer kartlarla aynı seviyeye getirildi */}
+        <div className="space-y-3">
+          <Card className="border-l-4 border-l-blue-500 cursor-pointer hover:shadow-md transition-shadow" onClick={() => onNavigate("data-view")}>
+            <CardContent className="pt-2.5 pb-4 px-3 sm:px-4 relative">
+              <div className="flex flex-col items-start justify-start pt-0">
+                <div>
+                  <div className="flex items-center space-x-2 mb-1.5">
+                    <span className="bg-blue-100 p-1.5 sm:p-2 rounded-full flex-shrink-0"><Users className="h-3 w-3 sm:h-4 sm:w-4 text-blue-500" /></span>
+                    <div className="min-w-0">
+                      <h3 className="text-xs sm:text-sm font-bold text-muted-foreground text-left whitespace-nowrap">Toplam</h3>
+                      <p className="text-xs font-normal text-muted-foreground -mt-0.5 whitespace-nowrap">Tur Satışı</p>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-lg sm:text-xl font-bold text-blue-600">{toursData.length}</p>
                   </div>
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Toplam Rezervasyonlar - Tur Satışı kartının hemen altına yerleştirildi */}
+          <Card className="border-l-4 border-l-green-500 cursor-pointer hover:shadow-md transition-shadow" onClick={() => onNavigate("rezervasyon-liste")}>
+            <CardContent className="pt-2.5 pb-4 px-3 sm:px-4 relative">
+              <div className="flex flex-col items-start justify-start pt-0">
                 <div>
-                  <p className="text-lg sm:text-xl font-bold text-blue-600">{toursData.length}</p>
+                  <div className="flex items-center space-x-2 mb-1.5">
+                    <span className="bg-green-100 p-1.5 sm:p-2 rounded-full flex-shrink-0"><BookOpen className="h-3 w-3 sm:h-4 sm:w-4 text-green-500" /></span>
+                    <div className="min-w-0">
+                      <h3 className="text-xs sm:text-sm font-bold text-muted-foreground text-left whitespace-nowrap">Toplam</h3>
+                      <p className="text-xs font-normal text-muted-foreground -mt-0.5 whitespace-nowrap">Rezervasyonlar</p>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-lg sm:text-xl font-bold text-green-600">
+                      {reservationsData.length}
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
 
         {/* Yaklaşan Turlar - Mevcut kart korundu */}
         <Card className="border-l-4 border-l-yellow-500 cursor-pointer hover:shadow-md transition-shadow" onClick={() => onNavigate("data-view")}>
@@ -841,18 +865,37 @@ export function MainDashboard({ onNavigate, financialData = [], toursData = [], 
           </CardContent>
         </Card>        {/* Yaklaşan Rezervasyonlar - Son 3 Gün Uyarı Sistemi */}
         <Card 
-          className="border-l-4 border-l-red-500 bg-red-50 cursor-pointer hover:shadow-md transition-shadow"
+          className={`border-l-4 border-l-red-500 bg-red-50 cursor-pointer hover:shadow-md transition-shadow ${(() => {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const tomorrow = new Date(today);
+            tomorrow.setDate(today.getDate() + 1);
+            const dayAfterTomorrow = new Date(today);
+            dayAfterTomorrow.setDate(today.getDate() + 2);
+            
+            // Yarın olan rezervasyonları kontrol et (1 gün kalan)
+            const hasUrgentReservations = reservationsData.some((reservation: any) => {
+              if (!reservation || !reservation.turTarihi) return false;
+              const reservationDate = new Date(reservation.turTarihi);
+              reservationDate.setHours(0, 0, 0, 0);
+              // Yarın olan rezervasyonlar için yanıp sönme
+              return reservationDate >= tomorrow && reservationDate < dayAfterTomorrow;
+            });
+            
+            return hasUrgentReservations ? 'animate-pulse' : '';
+          })()}`}
           onClick={() => onNavigate("rezervasyon-liste")}
         >
-          <CardContent className="pt-3 pb-4 sm:pb-6 px-3 sm:px-4 relative">
+          <CardContent className="pt-2 pb-3 px-2 sm:px-3 relative">
             <div className="flex flex-col items-start justify-start pt-0">
               <div className="w-full">
-                <div className="flex items-center space-x-2 mb-2">
-                  <span className="bg-red-100 p-1.5 sm:p-2 rounded-full flex-shrink-0">
-                    <Calendar className="h-3 w-3 sm:h-4 sm:w-4 text-red-500" />
-                  </span>                  <div className="min-w-0 overflow-hidden flex-1">
-                    <h3 className="text-[9px] sm:text-xs font-bold text-muted-foreground text-left truncate overflow-hidden">Yaklaşan</h3>
-                    <p className="text-[7px] sm:text-[9px] font-normal text-muted-foreground -mt-0.5 truncate overflow-hidden whitespace-nowrap">Rezervasyonlar (3 Gün)</p>
+                <div className="flex items-center space-x-1.5 mb-1.5">
+                  <span className="bg-red-100 p-1 sm:p-1.5 rounded-full flex-shrink-0">
+                    <Calendar className="h-2.5 w-2.5 sm:h-3.5 sm:w-3.5 text-red-500" />
+                  </span>
+                  <div className="min-w-0 overflow-hidden flex-1">
+                    <h3 className="text-xs sm:text-sm font-bold text-muted-foreground text-left leading-tight">Yaklaşan</h3>
+                    <p className="text-[7px] sm:text-[9px] font-normal text-muted-foreground -mt-0.5 leading-tight">Rezervasyonlar (3 Gün)</p>
                   </div>
                 </div>
                 
@@ -869,12 +912,12 @@ export function MainDashboard({ onNavigate, financialData = [], toursData = [], 
                   const threeDaysLater = new Date(today);
                   threeDaysLater.setDate(today.getDate() + 3);
                   
-                  // Bugün ve yarın (1 gün kalan) - En acil
+                  // Yarın olan rezervasyonlar (1 gün kalan) - En acil
                   const urgentReservations = reservationsData.filter((reservation: any) => {
                     if (!reservation || !reservation.turTarihi) return false;
                     const reservationDate = new Date(reservation.turTarihi);
                     reservationDate.setHours(0, 0, 0, 0);
-                    return reservationDate >= today && reservationDate < tomorrow;
+                    return reservationDate >= tomorrow && reservationDate < dayAfterTomorrow;
                   });
                   
                   // 2. gün
@@ -896,7 +939,7 @@ export function MainDashboard({ onNavigate, financialData = [], toursData = [], 
                   const totalNext3Days = urgentReservations.length + moderateReservations.length + lightReservations.length;
                   
                   return (
-                    <div className="space-y-2">
+                    <div className="space-y-1.5">
                       {/* Toplam sayı */}
                       <div className="flex items-center gap-2">
                         <p className="text-lg sm:text-xl font-bold text-red-600">
@@ -904,19 +947,19 @@ export function MainDashboard({ onNavigate, financialData = [], toursData = [], 
                         </p>
                       </div>
                       
-                      {/* Günlük breakdown */}
-                      <div className="space-y-1">
-                        {/* 1. gün (Bugün/Yarın) - En koyu kırmızı */}
+                      {/* Günlük breakdown - Kompakt */}
+                      <div className="space-y-0.5 max-h-20 overflow-y-auto">
+                        {/* 1. gün (Yarın) - En koyu kırmızı */}
                         {urgentReservations.length > 0 && (
-                          <div className="flex items-center justify-between bg-red-700 text-white px-2 py-1 rounded text-xs animate-pulse">
-                            <span className="font-semibold">Bugün/Yarın:</span>
+                          <div className="flex items-center justify-between bg-red-700 text-white px-1.5 py-0.5 rounded text-[8px] sm:text-[9px] animate-pulse">
+                            <span className="font-semibold">Yarın:</span>
                             <span className="font-bold">{urgentReservations.length} ACIL!</span>
                           </div>
                         )}
                         
                         {/* 2. gün - Orta kırmızı */}
                         {moderateReservations.length > 0 && (
-                          <div className="flex items-center justify-between bg-red-500 text-white px-2 py-1 rounded text-xs">
+                          <div className="flex items-center justify-between bg-red-500 text-white px-1.5 py-0.5 rounded text-[8px] sm:text-[9px]">
                             <span className="font-medium">2. Gün:</span>
                             <span className="font-semibold">{moderateReservations.length}</span>
                           </div>
@@ -924,7 +967,7 @@ export function MainDashboard({ onNavigate, financialData = [], toursData = [], 
                         
                         {/* 3. gün - Açık kırmızı */}
                         {lightReservations.length > 0 && (
-                          <div className="flex items-center justify-between bg-red-300 text-red-800 px-2 py-1 rounded text-xs">
+                          <div className="flex items-center justify-between bg-red-300 text-red-800 px-1.5 py-0.5 rounded text-[8px] sm:text-[9px]">
                             <span className="font-medium">3. Gün:</span>
                             <span className="font-semibold">{lightReservations.length}</span>
                           </div>
@@ -932,7 +975,7 @@ export function MainDashboard({ onNavigate, financialData = [], toursData = [], 
                         
                         {/* Hiç rezervasyon yoksa */}
                         {totalNext3Days === 0 && (
-                          <div className="text-xs text-gray-500 text-center py-1">
+                          <div className="text-[8px] sm:text-[9px] text-gray-500 text-center py-1">
                             Yaklaşan 3 günde rezervasyon yok
                           </div>
                         )}
@@ -945,22 +988,193 @@ export function MainDashboard({ onNavigate, financialData = [], toursData = [], 
           </CardContent>
         </Card>
 
-        {/* Toplam Rezervasyonlar */}
-        <Card className="border-l-4 border-l-green-500 cursor-pointer hover:shadow-md transition-shadow" onClick={() => onNavigate("rezervasyon-liste")}>
-          <CardContent className="pt-3 pb-4 sm:pb-6 px-3 sm:px-4 relative">
+        {/* Rezervasyon Cari - Ödeme Tarihi Geçenler */}
+        <Card 
+          className={`border-l-4 border-l-red-600 bg-red-50 cursor-pointer hover:shadow-md transition-shadow ${(() => {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const hasOverdue = reservationsData.some((reservation: any) => {
+              if (!reservation || !reservation.turTarihi) return false;
+              const tourDate = new Date(reservation.turTarihi);
+              tourDate.setHours(0, 0, 0, 0);
+              let paymentDueDate = new Date(tourDate);
+              if (reservation.odemeTarihi && reservation.odemeTarihi !== '') {
+                paymentDueDate = new Date(reservation.odemeTarihi);
+              } else {
+                paymentDueDate.setDate(tourDate.getDate() + 1);
+              }
+              paymentDueDate.setHours(0, 0, 0, 0);
+              const isOverdue = paymentDueDate < today;
+              let kalanBorc = 0;
+              if (reservation.kalan !== undefined && reservation.kalan !== null && reservation.kalan !== '') {
+                kalanBorc = parseFloat(String(reservation.kalan).replace(/[^\d.-]/g, '')) || 0;
+              } else {
+                const toplamTutar = parseFloat(String(reservation.tutar || reservation.toplamTutar || reservation.totalPrice || reservation.totalAmount || 0).replace(/[^\d.-]/g, '')) || 0;
+                const yapilanOdeme = parseFloat(String(reservation.odeme || reservation.odemeMiktari || reservation.yapilanOdeme || reservation.paidAmount || reservation.partialPaymentAmount || 0).replace(/[^\d.-]/g, '')) || 0;
+                kalanBorc = toplamTutar - yapilanOdeme;
+              }
+              return kalanBorc > 0 && isOverdue;
+            });
+            return hasOverdue ? 'animate-pulse' : '';
+          })()}`}
+          onClick={() => onNavigate("reservation-cari")}
+        >
+          <CardContent className="pt-2 pb-3 px-2 sm:px-3 relative">
             <div className="flex flex-col items-start justify-start pt-0">
-              <div>
-                <div className="flex items-center space-x-2 mb-2">
-                  <span className="bg-green-100 p-1.5 sm:p-2 rounded-full flex-shrink-0"><BookOpen className="h-3 w-3 sm:h-4 sm:w-4 text-green-500" /></span>
-                  <div className="min-w-0">
-                    <h3 className="text-xs sm:text-sm font-bold text-muted-foreground text-left whitespace-nowrap">Toplam</h3>
-                    <p className="text-xs font-normal text-muted-foreground -mt-0.5 whitespace-nowrap">Rezervasyonlar</p>
+              <div className="w-full">
+                <div className="flex items-center space-x-1.5 mb-1.5">
+                  <span className="bg-red-200 p-1 sm:p-1.5 rounded-full flex-shrink-0">
+                    <Building2 className="h-2.5 w-2.5 sm:h-3.5 sm:w-3.5 text-red-700" />
+                  </span>
+                  <div className="min-w-0 overflow-hidden flex-1">
+                    <h3 className="text-xs sm:text-sm font-bold text-red-700 text-left leading-tight">Ödeme Tarihi</h3>
+                    <p className="text-[10px] sm:text-xs font-normal text-red-600 -mt-0.5 leading-tight">Geçenler</p>
                   </div>
-                </div>                <div>
-                  <p className="text-lg sm:text-xl font-bold text-green-600">
-                    {reservationsData.length}
-                  </p>
                 </div>
+                {(() => {
+                  const today = new Date();
+                  today.setHours(0, 0, 0, 0);
+                  
+                  // Ödeme tarihi geçen ve gerçekten kalan borcu olan rezervasyonları filtrele
+                  const overdueReservations = reservationsData.filter((reservation: any) => {
+                    if (!reservation || !reservation.turTarihi) return false;
+                    
+                    const tourDate = new Date(reservation.turTarihi);
+                    tourDate.setHours(0, 0, 0, 0);
+                    
+                    // Ödeme tarihini kontrol et - eğer ödeme tarihi belirtilmişse onu kullan, yoksa tur tarihinden 1 gün sonra
+                    let paymentDueDate = new Date(tourDate);
+                    if (reservation.odemeTarihi && reservation.odemeTarihi !== '') {
+                      paymentDueDate = new Date(reservation.odemeTarihi);
+                    } else {
+                      // Ödeme tarihi yoksa tur tarihinden 1 gün sonra ödeme tarihidir
+                      paymentDueDate.setDate(tourDate.getDate() + 1);
+                    }
+                    paymentDueDate.setHours(0, 0, 0, 0);
+                    
+                    const isOverdue = paymentDueDate < today;
+                    
+                    // Kalan borç hesaplama - rezervasyon cari servisindeki alanları kullan
+                    let kalanBorc = 0;
+                    
+                    // Önce direkt kalan alanını kontrol et (rezervasyon cari'de kullanılan alan)
+                    if (reservation.kalan !== undefined && reservation.kalan !== null && reservation.kalan !== '') {
+                      kalanBorc = parseFloat(String(reservation.kalan).replace(/[^\d.-]/g, '')) || 0;
+                    }
+                    // Eğer kalan alanı yoksa tutar - ödeme hesapla
+                    else {
+                      const toplamTutar = parseFloat(String(reservation.tutar || reservation.toplamTutar || reservation.totalPrice || reservation.totalAmount || 0).replace(/[^\d.-]/g, '')) || 0;
+                      const yapilanOdeme = parseFloat(String(reservation.odeme || reservation.odemeMiktari || reservation.yapilanOdeme || reservation.paidAmount || reservation.partialPaymentAmount || 0).replace(/[^\d.-]/g, '')) || 0;
+                      kalanBorc = toplamTutar - yapilanOdeme;
+                    }
+                    
+                    // Kalan borç 0'dan büyük ve ödeme tarihi geçmiş olanları filtrele
+                    return kalanBorc > 0 && isOverdue;
+                  });
+                  
+                  if (overdueReservations.length === 0) {
+                    return (
+                      <div className="text-[8px] sm:text-[9px] text-green-600 text-center py-1 bg-green-100 rounded">
+                        ✅ Geciken ödeme yok
+                      </div>
+                    );
+                  }
+                  
+                  // Firmalara göre borçları grupla
+                  const companyDebts = overdueReservations.reduce((acc: any, reservation: any) => {
+                    const companyName = reservation.firma ||
+                      reservation.musteriAdiSoyadi ||
+                      reservation.musteriAdi ||
+                      reservation.customerName ||
+                      reservation.ad ||
+                      reservation.name ||
+                      'Bilinmeyen Firma';
+                    
+                    if (!acc[companyName]) {
+                      acc[companyName] = [];
+                    }
+                    acc[companyName].push(reservation);
+                    return acc;
+                  }, {});
+                  
+                  // En eski gecikme gününü hesapla
+                  let oldestDaysDiff = 0;
+                  Object.values(companyDebts).forEach((debts: any) => {
+                    const oldestDebt = debts.reduce((oldest: any, current: any) => {
+                      const oldestDate = new Date(oldest.turTarihi);
+                      const currentDate = new Date(current.turTarihi);
+                      return currentDate < oldestDate ? current : oldest;
+                    });
+                    
+                    const tourDate = new Date(oldestDebt.turTarihi);
+                    let paymentDueDate = new Date(tourDate);
+                    if (oldestDebt.odemeTarihi && oldestDebt.odemeTarihi !== '') {
+                      paymentDueDate = new Date(oldestDebt.odemeTarihi);
+                    } else {
+                      paymentDueDate.setDate(tourDate.getDate() + 1);
+                    }
+                    
+                    const daysDiff = Math.floor((today.getTime() - paymentDueDate.getTime()) / (1000 * 60 * 60 * 24));
+                    if (daysDiff > oldestDaysDiff) {
+                      oldestDaysDiff = daysDiff;
+                    }
+                  });
+                  
+                  // Sadece gerçekten borcu olan firmalar (en az bir rezervasyonda kalan borç > 0)
+                  const companiesSorted = Object.entries(companyDebts)
+                    .map(([companyName, debts]: [string, any[]]) => {
+                      // En eski gecikme gününü bul
+                      const oldestDebt = debts.reduce((oldest: any, current: any) => {
+                        const oldestDate = new Date(oldest.turTarihi);
+                        const currentDate = new Date(current.turTarihi);
+                        return currentDate < oldestDate ? current : oldest;
+                      });
+                      
+                      // En eski borcun ödeme tarihini hesapla
+                      const tourDate = new Date(oldestDebt.turTarihi);
+                      let paymentDueDate = new Date(tourDate);
+                      if (oldestDebt.odemeTarihi && oldestDebt.odemeTarihi !== '') {
+                        paymentDueDate = new Date(oldestDebt.odemeTarihi);
+                      } else {
+                        paymentDueDate.setDate(tourDate.getDate() + 1);
+                      }
+                      
+                      const daysDiff = Math.floor((today.getTime() - paymentDueDate.getTime()) / (1000 * 60 * 60 * 24));
+                      
+                      return {
+                        name: companyName,
+                        count: debts.length,
+                        daysDiff,
+                      };
+                    })
+                    .filter(company => company.count > 0)
+                    .sort((a, b) => b.count - a.count);
+                  
+                  const totalOverdueCount = Object.keys(companyDebts).length;
+                  
+                  return (
+                    <div className="space-y-1.5">
+                      {/* Toplam özet bilgiler */}
+                      <div className="bg-red-100 border border-red-200 rounded p-1.5 mb-2">
+                        <div className="flex items-center justify-between text-[9px] sm:text-[10px] font-bold text-red-800">
+                          <span>Toplam {totalOverdueCount}</span>
+                          <span>En Eski {oldestDaysDiff} gün</span>
+                        </div>
+                      </div>
+                      
+                      {/* Firma listesi */}
+                      <div className="space-y-0.5 max-h-16 overflow-y-auto">
+                        {companiesSorted.map((company, index) => (
+                          <div key={index} className="text-[8px] sm:text-[9px] text-red-800 font-medium">
+                            <div className="truncate break-words leading-tight">
+                              {company.name}: {company.count} borç - {company.daysDiff} gün
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           </CardContent>
@@ -1035,16 +1249,29 @@ export function MainDashboard({ onNavigate, financialData = [], toursData = [], 
                     });
                   }
                   
-                  // Son 6 rezervasyonu göster (tarih sırasına göre)
+                  // Son 6 rezervasyonu göster - Önce yaklaşanları (son 2 gün) üstte göster
                   const sortedReservations = filteredReservations
                     .sort((a, b) => {
-                      // Tur tarihine göre artan sıra: en yakın tarih en üstte
-                      const dateA = new Date(a.turTarihi).getTime();
-                      const dateB = new Date(b.turTarihi).getTime();
-                      if (isNaN(dateA) || isNaN(dateB)) return 0;
-                      return dateA - dateB;
+                      const dateA = new Date(a.turTarihi);
+                      const dateB = new Date(b.turTarihi);
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      
+                      const twoDaysLater = new Date(today);
+                      twoDaysLater.setDate(today.getDate() + 2);
+                      
+                      // A ve B'nin yaklaşan rezervasyon olup olmadığını kontrol et (son 2 gün)
+                      const aIsUpcoming = dateA >= today && dateA < twoDaysLater;
+                      const bIsUpcoming = dateB >= today && dateB < twoDaysLater;
+                      
+                      // Yaklaşan rezervasyonlar önce gelir
+                      if (aIsUpcoming && !bIsUpcoming) return -1;
+                      if (!aIsUpcoming && bIsUpcoming) return 1;
+                      
+                      // Her ikisi de yaklaşan ise ya da ikisi de değilse tarih sırasına göre sırala
+                      return dateA.getTime() - dateB.getTime();
                     })
-                    .slice(0, 6); // Son 6 kayıt (en yakın tarihler)
+                    .slice(0, 6); // Son 6 kayıt
 
                   if (sortedReservations && sortedReservations.length > 0) {
                     const rows: React.ReactElement[] = [];
@@ -1064,18 +1291,18 @@ export function MainDashboard({ onNavigate, financialData = [], toursData = [], 
                       const reservationDate = new Date(reservation.turTarihi);
                       reservationDate.setHours(0, 0, 0, 0);
                       
-                      // Yakınlık derecesine göre renklendirme (son 3 gün)
+                      // Yakınlık derecesine göre renklendirme (son 2 gün öncelik)
                       let rowBgClass = index % 2 === 0 ? "" : "bg-gray-50"; // Varsayılan zebra
                       let borderClass = "";
                       
                       if (reservationDate >= today && reservationDate < tomorrow) {
-                        // Bugün (1 gün kalan) - En koyu kırmızı
-                        rowBgClass = "bg-red-100 border-l-4 border-red-700";
-                        borderClass = "border-red-700";
+                        // Bugün (1 gün kalan) - En koyu kırmızı, yanıp sönme efekti
+                        rowBgClass = "bg-red-200 border-l-4 border-red-800 animate-pulse";
+                        borderClass = "border-red-800";
                       } else if (reservationDate >= tomorrow && reservationDate < dayAfterTomorrow) {
-                        // Yarın (2 gün kalan) - Orta kırmızı
-                        rowBgClass = "bg-red-75 border-l-4 border-red-500";
-                        borderClass = "border-red-500";
+                        // Yarın (2 gün kalan) - Koyu kırmızı
+                        rowBgClass = "bg-red-100 border-l-4 border-red-600";
+                        borderClass = "border-red-600";
                       } else if (reservationDate >= dayAfterTomorrow && reservationDate < threeDaysLater) {
                         // Öbür gün (3 gün kalan) - Açık kırmızı
                         rowBgClass = "bg-red-50 border-l-4 border-red-300";

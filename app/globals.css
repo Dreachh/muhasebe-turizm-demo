@@ -92,3 +92,12 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+/* Özel kırmızı arka plan renkleri */
+.bg-red-150 {
+  background-color: rgb(254 202 202); /* Orta kırmızı */
+}
+
+.bg-red-200 {
+  background-color: rgb(254 178 178); /* Koyu kırmızı */
+}

@@ -13,6 +13,7 @@ import { Printer, ArrowLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { tr } from "date-fns/locale";
+import { getSettings } from "@/lib/db";
 
 export default function ReservationCariPrintPage() {
   const params = useParams();
@@ -23,10 +24,12 @@ export default function ReservationCariPrintPage() {
   const [detayliListe, setDetayliListe] = useState<any[]>([]);
   const [odemeDetaylar, setOdemeDetaylar] = useState<ReservationOdemeDetay[]>([]);
   const [loading, setLoading] = useState(true);
+  const [companyInfo, setCompanyInfo] = useState<any>({});
 
   useEffect(() => {
     if (cariId) {
       loadCariData();
+      loadCompanySettings();
     }
   }, [cariId]);
 
@@ -47,6 +50,17 @@ export default function ReservationCariPrintPage() {
       console.error("Cari verileri yüklenirken hata:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadCompanySettings = async () => {
+    try {
+      const settings = await getSettings();
+      if (settings?.companyInfo) {
+        setCompanyInfo(settings.companyInfo);
+      }
+    } catch (error) {
+      console.error("Şirket ayarları yüklenirken hata:", error);
     }
   };
 
@@ -128,9 +142,23 @@ export default function ReservationCariPrintPage() {
       {/* Yazdırılacak içerik - A4 tam genişlik */}
       <div className="p-6 w-full">
         {/* Header */}
-        <div className="text-center mb-6">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">REZERVASYON CARİ KARTI</h1>
-          <p className="text-gray-600">Yazdırma Tarihi: {getCurrentDate()}</p>
+        <div className="mb-6 relative">
+          {/* Sol üst köşede şirket logosu */}
+          {companyInfo.logo && (
+            <div className="absolute top-0 left-0 w-32 h-32 flex items-center justify-center">
+              <img 
+                src={companyInfo.logo} 
+                alt="Şirket Logosu" 
+                className="max-w-full max-h-full object-contain"
+              />
+            </div>
+          )}
+          
+          {/* Başlık - logo varsa sağa kaydırılmış */}
+          <div className={`text-center ${companyInfo.logo ? 'ml-36' : ''}`}>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">REZERVASYON CARİ KARTI</h1>
+            <p className="text-gray-600">Yazdırma Tarihi: {getCurrentDate()}</p>
+          </div>
         </div>
 
         {/* Cari Bilgileri - Tek satır düzenlemesi */}
