@@ -262,15 +262,26 @@ export default function ReservationCariKartlari({ period }: ReservationCariKartl
     router.push(`/print/reservation-cari/${cari.id}`);
   };
 
-  const formatCurrency = (amount: number) => {
+  const formatCurrency = (amount?: number) => {
+    if (!amount) return "0,00 ₺";
     return new Intl.NumberFormat('tr-TR', {
       style: 'currency',
       currency: 'TRY'
     }).format(amount);
   };
 
-  const formatDate = (timestamp: Timestamp) => {
-    return timestamp.toDate().toLocaleDateString('tr-TR');
+  const formatDate = (date?: string | Timestamp) => {
+    if (!date) return "-";
+    
+    if (typeof date === 'string') {
+      return new Date(date).toLocaleDateString('tr-TR');
+    }
+    
+    if (date && typeof date === 'object' && 'toDate' in date) {
+      return date.toDate().toLocaleDateString('tr-TR');
+    }
+    
+    return "-"; // Fallback
   };
 
   const getBalanceColor = (balance: number) => {

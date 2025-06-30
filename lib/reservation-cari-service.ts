@@ -71,6 +71,18 @@ export interface ReservationOdemeDetay {
   period: string;
 }
 
+// ReservationCariPayment alias - Geriye uyumluluk için
+export interface ReservationCariPayment extends ReservationOdemeDetay {
+  // Ek özellikler için
+  type?: "debt" | "payment";
+  amount?: number;
+  description?: string;
+  date?: string;
+  currency?: string;
+  paymentMethod?: string;
+  receiptNumber?: string;
+}
+
 export class ReservationCariService {
   private static getFirestore() {
     const db = getDb();
@@ -1054,6 +1066,77 @@ export class ReservationCariService {
         debtorCount: 0,
         creditorCount: 0,
       };
+    }
+  }
+
+  // Cariye ait ödemeleri getir - geriye uyumluluk için
+  static async getPaymentsByCariId(cariId: string): Promise<ReservationCariPayment[]> {
+    try {
+      const odemeDetaylar = await this.getOdemeDetaysByCariId(cariId);
+      
+      // Formatı dönüştür
+      return odemeDetaylar.map(odeme => ({
+        ...odeme,
+        type: "payment" as "payment",
+        amount: odeme.tutar,
+        description: odeme.aciklama,
+        date: odeme.tarih,
+        currency: "TRY", // Varsayılan
+        paymentMethod: odeme.odemeYontemi,
+        receiptNumber: odeme.fisNumarasi,
+      }));
+    } catch (error) {
+      console.error("Cari ödemeleri getirme hatası:", error);
+      throw error;
+    }
+  }
+
+  // Ödeme ekle - geriye uyumluluk için
+  static async addPayment(paymentData: {
+    cariId: string;
+    borcId?: string;
+    reservationId?: string;
+    tutar?: number;
+    tarih?: string;
+    aciklama?: string;
+    odemeYontemi?: string;
+    odemeYapan?: string;
+    fisNumarasi?: string;
+    // Ek alanlar
+    type?: "debt" | "payment";
+    amount?: number;
+    description?: string;
+    date?: any; // Timestamp veya string
+    currency?: string;
+    paymentMethod?: string;
+    receiptNumber?: string;
+    period?: string;
+  }): Promise<void> {
+    try {
+      // Parametreleri dönüştür
+      const tutar = paymentData.amount || paymentData.tutar || 0;
+      const tarih = paymentData.date ? 
+        (typeof paymentData.date === 'string' ? paymentData.date : paymentData.date.toDate?.()?.toISOString()?.split('T')[0]) :
+        paymentData.tarih || new Date().toISOString().split('T')[0];
+      const aciklama = paymentData.description || paymentData.aciklama || "";
+      const odemeYontemi = paymentData.paymentMethod || paymentData.odemeYontemi;
+      const fisNumarasi = paymentData.receiptNumber || paymentData.fisNumarasi;
+      
+      // Eğer borcId yoksa, dummy bir değer ver (eski kullanım için)
+      const borcId = paymentData.borcId || "dummy-borc-id";
+      
+      await this.addOdeme(
+        borcId,
+        tutar,
+        tarih,
+        aciklama,
+        odemeYontemi,
+        paymentData.odemeYapan,
+        fisNumarasi
+      );
+    } catch (error) {
+      console.error("Ödeme ekleme hatası:", error);
+      throw error;
     }
   }
 }
