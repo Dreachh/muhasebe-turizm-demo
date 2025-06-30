@@ -863,26 +863,24 @@ export function MainDashboard({ onNavigate, financialData = [], toursData = [], 
               </div>
             </div>
           </CardContent>
-        </Card>        {/* Yaklaşan Rezervasyonlar - Son 3 Gün Uyarı Sistemi */}
+        </Card>        {/* Yaklaşan Rezervasyonlar - Bugün ve Sonraki Günler */}
         <Card 
           className={`border-l-4 border-l-red-500 bg-red-50 cursor-pointer hover:shadow-md transition-shadow ${(() => {
             const today = new Date();
             today.setHours(0, 0, 0, 0);
             const tomorrow = new Date(today);
             tomorrow.setDate(today.getDate() + 1);
-            const dayAfterTomorrow = new Date(today);
-            dayAfterTomorrow.setDate(today.getDate() + 2);
             
-            // Yarın olan rezervasyonları kontrol et (1 gün kalan)
-            const hasUrgentReservations = reservationsData.some((reservation: any) => {
+            // Bugün olan rezervasyonları kontrol et (en acil)
+            const hasTodayReservations = reservationsData.some((reservation: any) => {
               if (!reservation || !reservation.turTarihi) return false;
               const reservationDate = new Date(reservation.turTarihi);
               reservationDate.setHours(0, 0, 0, 0);
-              // Yarın olan rezervasyonlar için yanıp sönme
-              return reservationDate >= tomorrow && reservationDate < dayAfterTomorrow;
+              // Bugün olan rezervasyonlar için yanıp sönme
+              return reservationDate.getTime() === today.getTime();
             });
             
-            return hasUrgentReservations ? 'animate-pulse' : '';
+            return hasTodayReservations ? 'animate-pulse' : '';
           })()}`}
           onClick={() => onNavigate("rezervasyon-liste")}
         >
@@ -895,7 +893,7 @@ export function MainDashboard({ onNavigate, financialData = [], toursData = [], 
                   </span>
                   <div className="min-w-0 overflow-hidden flex-1">
                     <h3 className="text-xs sm:text-sm font-bold text-muted-foreground text-left leading-tight">Yaklaşan</h3>
-                    <p className="text-[7px] sm:text-[9px] font-normal text-muted-foreground -mt-0.5 leading-tight">Rezervasyonlar (3 Gün)</p>
+                    <p className="text-[7px] sm:text-[9px] font-normal text-muted-foreground -mt-0.5 leading-tight">Rezervasyonlar (Bugün+)</p>
                   </div>
                 </div>
                 
@@ -903,80 +901,54 @@ export function MainDashboard({ onNavigate, financialData = [], toursData = [], 
                   const today = new Date();
                   today.setHours(0, 0, 0, 0);
                   
-                  const tomorrow = new Date(today);
-                  tomorrow.setDate(today.getDate() + 1);
-                  
-                  const dayAfterTomorrow = new Date(today);
-                  dayAfterTomorrow.setDate(today.getDate() + 2);
-                  
-                  const threeDaysLater = new Date(today);
-                  threeDaysLater.setDate(today.getDate() + 3);
-                  
-                  // Yarın olan rezervasyonlar (1 gün kalan) - En acil
-                  const urgentReservations = reservationsData.filter((reservation: any) => {
+                  // Bugünden başlayarak tüm gelecek rezervasyonları say
+                  const upcomingReservations = reservationsData.filter((reservation: any) => {
                     if (!reservation || !reservation.turTarihi) return false;
                     const reservationDate = new Date(reservation.turTarihi);
                     reservationDate.setHours(0, 0, 0, 0);
-                    return reservationDate >= tomorrow && reservationDate < dayAfterTomorrow;
+                    return reservationDate >= today; // Bugün dahil
                   });
                   
-                  // 2. gün
-                  const moderateReservations = reservationsData.filter((reservation: any) => {
+                  // Bugün olan rezervasyonlar (en acil)
+                  const todayReservations = reservationsData.filter((reservation: any) => {
                     if (!reservation || !reservation.turTarihi) return false;
                     const reservationDate = new Date(reservation.turTarihi);
                     reservationDate.setHours(0, 0, 0, 0);
-                    return reservationDate >= tomorrow && reservationDate < dayAfterTomorrow;
+                    return reservationDate.getTime() === today.getTime();
                   });
                   
-                  // 3. gün
-                  const lightReservations = reservationsData.filter((reservation: any) => {
-                    if (!reservation || !reservation.turTarihi) return false;
-                    const reservationDate = new Date(reservation.turTarihi);
-                    reservationDate.setHours(0, 0, 0, 0);
-                    return reservationDate >= dayAfterTomorrow && reservationDate < threeDaysLater;
-                  });
-                  
-                  const totalNext3Days = urgentReservations.length + moderateReservations.length + lightReservations.length;
                   
                   return (
                     <div className="space-y-1.5">
                       {/* Toplam sayı */}
                       <div className="flex items-center gap-2">
                         <p className="text-lg sm:text-xl font-bold text-red-600">
-                          {totalNext3Days}
+                          {upcomingReservations.length}
                         </p>
                       </div>
                       
                       {/* Günlük breakdown - Kompakt */}
                       <div className="space-y-0.5 max-h-20 overflow-y-auto">
-                        {/* 1. gün (Yarın) - En koyu kırmızı */}
-                        {urgentReservations.length > 0 && (
+                        {/* Bugün - En koyu kırmızı */}
+                        {todayReservations.length > 0 && (
                           <div className="flex items-center justify-between bg-red-700 text-white px-1.5 py-0.5 rounded text-[8px] sm:text-[9px] animate-pulse">
-                            <span className="font-semibold">Yarın:</span>
-                            <span className="font-bold">{urgentReservations.length} ACIL!</span>
+                            <span className="font-semibold">Bugün:</span>
+                            <span className="font-bold">{todayReservations.length} ACİL!</span>
                           </div>
                         )}
                         
-                        {/* 2. gün - Orta kırmızı */}
-                        {moderateReservations.length > 0 && (
-                          <div className="flex items-center justify-between bg-red-500 text-white px-1.5 py-0.5 rounded text-[8px] sm:text-[9px]">
-                            <span className="font-medium">2. Gün:</span>
-                            <span className="font-semibold">{moderateReservations.length}</span>
-                          </div>
-                        )}
-                        
-                        {/* 3. gün - Açık kırmızı */}
-                        {lightReservations.length > 0 && (
-                          <div className="flex items-center justify-between bg-red-300 text-red-800 px-1.5 py-0.5 rounded text-[8px] sm:text-[9px]">
-                            <span className="font-medium">3. Gün:</span>
-                            <span className="font-semibold">{lightReservations.length}</span>
+                        {/* Gelecek rezervasyonları göster */}
+                        {upcomingReservations.length > todayReservations.length && (
+                          <div className="flex items-center justify-between bg-red-400 text-white px-1.5 py-0.5 rounded text-[8px] sm:text-[9px]">
+                            <span className="font-medium">Gelecek:</span>
+                            <span className="font-semibold">{upcomingReservations.length - todayReservations.length}</span>
                           </div>
                         )}
                         
                         {/* Hiç rezervasyon yoksa */}
-                        {totalNext3Days === 0 && (
+                        {upcomingReservations.length === 0 && (
                           <div className="text-[8px] sm:text-[9px] text-gray-500 text-center py-1">
-                            Yaklaşan 3 günde rezervasyon yok
+                            Yaklaşan rezervasyon yok
                           </div>
                         )}
                       </div>
@@ -1250,26 +1222,23 @@ export function MainDashboard({ onNavigate, financialData = [], toursData = [], 
                     });
                   }
                   
-                  // Son 6 rezervasyonu göster - Önce yaklaşanları (son 2 gün) üstte göster
-                  const sortedReservations = filteredReservations
+                  // Bugün ve gelecek rezervasyonları filtrele - geçmiş tarihleri hariç tut
+                  const today = new Date();
+                  today.setHours(0, 0, 0, 0);
+                  
+                  const futureReservations = filteredReservations.filter(reservation => {
+                    const reservationDate = new Date(reservation.turTarihi);
+                    reservationDate.setHours(0, 0, 0, 0);
+                    return reservationDate >= today; // Bugün dahil, gelecek rezervasyonlar
+                  });
+                  
+                  // Son 6 rezervasyonu göster - En yakın tarihli üstte (bugünden başlayarak)
+                  const sortedReservations = futureReservations
                     .sort((a, b) => {
                       const dateA = new Date(a.turTarihi);
                       const dateB = new Date(b.turTarihi);
-                      const today = new Date();
-                      today.setHours(0, 0, 0, 0);
                       
-                      const twoDaysLater = new Date(today);
-                      twoDaysLater.setDate(today.getDate() + 2);
-                      
-                      // A ve B'nin yaklaşan rezervasyon olup olmadığını kontrol et (son 2 gün)
-                      const aIsUpcoming = dateA >= today && dateA < twoDaysLater;
-                      const bIsUpcoming = dateB >= today && dateB < twoDaysLater;
-                      
-                      // Yaklaşan rezervasyonlar önce gelir
-                      if (aIsUpcoming && !bIsUpcoming) return -1;
-                      if (!aIsUpcoming && bIsUpcoming) return 1;
-                      
-                      // Her ikisi de yaklaşan ise ya da ikisi de değilse tarih sırasına göre sırala
+                      // Tarih sırasına göre sırala (en yakın tarih üstte)
                       return dateA.getTime() - dateB.getTime();
                     })
                     .slice(0, 6); // Son 6 kayıt
@@ -1292,20 +1261,20 @@ export function MainDashboard({ onNavigate, financialData = [], toursData = [], 
                       const reservationDate = new Date(reservation.turTarihi);
                       reservationDate.setHours(0, 0, 0, 0);
                       
-                      // Yakınlık derecesine göre renklendirme (son 2 gün öncelik)
+                      // Yakınlık derecesine göre renklendirme (bugün ve sonraki günler)
                       let rowBgClass = index % 2 === 0 ? "" : "bg-gray-50"; // Varsayılan zebra
                       let borderClass = "";
                       
-                      if (reservationDate >= today && reservationDate < tomorrow) {
-                        // Bugün (1 gün kalan) - En koyu kırmızı, yanıp sönme efekti
+                      if (reservationDate.getTime() === today.getTime()) {
+                        // Bugün - En koyu kırmızı, yanıp sönme efekti
                         rowBgClass = "bg-red-200 border-l-4 border-red-800 animate-pulse";
                         borderClass = "border-red-800";
                       } else if (reservationDate >= tomorrow && reservationDate < dayAfterTomorrow) {
-                        // Yarın (2 gün kalan) - Koyu kırmızı
+                        // Yarın - Koyu kırmızı
                         rowBgClass = "bg-red-100 border-l-4 border-red-600";
                         borderClass = "border-red-600";
                       } else if (reservationDate >= dayAfterTomorrow && reservationDate < threeDaysLater) {
-                        // Öbür gün (3 gün kalan) - Açık kırmızı
+                        // Öbür gün - Açık kırmızı
                         rowBgClass = "bg-red-50 border-l-4 border-red-300";
                         borderClass = "border-red-300";
                       }
