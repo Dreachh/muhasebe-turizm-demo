@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useParams } from "next/navigation";
 import { 
   ReservationCariService, 
@@ -94,11 +94,32 @@ export default function ReservationCariPrintPage() {
   };
 
   const formatCurrency = (amount: number, currency = "EUR") => {
+    // Map common currency codes if needed
+    const isoCode = currency === 'TL' ? 'TRY' : currency;
     return new Intl.NumberFormat('tr-TR', {
       style: 'currency',
-      currency: currency
+      currency: isoCode
     }).format(amount);
   };
+
+  // Para birimi bazında toplamları hesapla - memoized
+  const currencyTotals = useMemo(() => {
+    const totals: { [key: string]: { debt: number; payment: number; balance: number } } = {};
+    
+    // Detaylı listeden para birimi bazında toplamları hesapla
+    detayliListe.forEach(item => {
+      const currency = item.paraBirimi || 'EUR';
+      if (!totals[currency]) {
+        totals[currency] = { debt: 0, payment: 0, balance: 0 };
+      }
+      
+      totals[currency].debt += item.tutar || 0;
+      totals[currency].payment += item.odeme || 0;
+      totals[currency].balance += (item.tutar || 0) - (item.odeme || 0);
+    });
+    
+    return totals;
+  }, [detayliListe]);
 
   const formatDate = (dateString: string | Date | any) => {
     try {
@@ -228,15 +249,31 @@ export default function ReservationCariPrintPage() {
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-bold text-gray-900">Rezervasyon Detayları</h2>
             <div className="flex items-center gap-1 text-sm bg-gray-50 px-3 py-1 rounded-lg border">
-              <span className="text-gray-600">
-                {cari.balance > 0 ? 'Alacak:' : cari.balance < 0 ? 'Borç:' : 'Bakiye:'}
-              </span>
-              <span className={`font-bold ${cari.balance > 0 ? 'text-red-600' : cari.balance < 0 ? 'text-green-600' : 'text-gray-600'}`}>
-                {formatCurrency(Math.abs(cari.balance))}
-              </span>
-              <span className="text-gray-400 mx-2">|</span>
-              <span className="text-gray-600">Rezervasyon:</span>
-              <span className="font-bold text-blue-600">{detayliListe.length} adet</span>
+              {Object.keys(currencyTotals).length > 0 ? (
+                <div className="flex flex-wrap gap-4">
+                  {Object.entries(currencyTotals).map(([currency, totals]) => (
+                    <div key={currency} className="flex items-center gap-1">
+                      <span className="text-gray-600">
+                        {totals.balance > 0 ? 'Alacak:' : totals.balance < 0 ? 'Borç:' : 'Bakiye:'}
+                      </span>
+                      <span className={`font-bold ${totals.balance > 0 ? 'text-red-600' : totals.balance < 0 ? 'text-green-600' : 'text-gray-600'}`}>
+                        {formatCurrency(Math.abs(totals.balance), currency)}
+                      </span>
+                    </div>
+                  ))}
+                  <span className="text-gray-400 mx-2">|</span>
+                  <span className="text-gray-600">Rezervasyon:</span>
+                  <span className="font-bold text-blue-600">{detayliListe.length} adet</span>
+                </div>
+              ) : (
+                <>
+                  <span className="text-gray-600">Bakiye:</span>
+                  <span className="font-bold text-gray-600">0,00 €</span>
+                  <span className="text-gray-400 mx-2">|</span>
+                  <span className="text-gray-600">Rezervasyon:</span>
+                  <span className="font-bold text-blue-600">0 adet</span>
+                </>
+              )}
             </div>
           </div>
           {detayliListe.length > 0 ? (
@@ -300,20 +337,38 @@ export default function ReservationCariPrintPage() {
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr className="bg-gray-200 font-bold h-8">
-                    <td colSpan={7} className="border border-gray-300 px-1 py-0.5 text-right text-[10px]">
-                      TOPLAM:
-                    </td>
-                    <td className="border border-gray-300 px-1 py-0.5 text-right text-[10px]">
-                      {formatCurrency(cari.totalDebt)}
-                    </td>
-                    <td className="border border-gray-300 px-1 py-0.5 text-right text-[10px]">
-                      {formatCurrency(cari.totalPayment)}
-                    </td>
-                    <td className="border border-gray-300 px-1 py-0.5 text-right text-[10px]">
-                      {formatCurrency(cari.balance)}
-                    </td>
-                  </tr>
+                  {Object.entries(currencyTotals).map(([currency, totals], index) => (
+                    <tr key={currency} className="bg-gray-200 font-bold h-8">
+                      <td colSpan={7} className="border border-gray-300 px-1 py-0.5 text-right text-[10px]">
+                        {index === 0 ? 'TOPLAM:' : ''} {currency}
+                      </td>
+                      <td className="border border-gray-300 px-1 py-0.5 text-right text-[10px]">
+                        {formatCurrency(totals.debt, currency)}
+                      </td>
+                      <td className="border border-gray-300 px-1 py-0.5 text-right text-[10px]">
+                        {formatCurrency(totals.payment, currency)}
+                      </td>
+                      <td className="border border-gray-300 px-1 py-0.5 text-right text-[10px]">
+                        {formatCurrency(totals.balance, currency)}
+                      </td>
+                    </tr>
+                  ))}
+                  {Object.keys(currencyTotals).length === 0 && (
+                    <tr className="bg-gray-200 font-bold h-8">
+                      <td colSpan={7} className="border border-gray-300 px-1 py-0.5 text-right text-[10px]">
+                        TOPLAM:
+                      </td>
+                      <td className="border border-gray-300 px-1 py-0.5 text-right text-[10px]">
+                        0,00 €
+                      </td>
+                      <td className="border border-gray-300 px-1 py-0.5 text-right text-[10px]">
+                        0,00 €
+                      </td>
+                      <td className="border border-gray-300 px-1 py-0.5 text-right text-[10px]">
+                        0,00 €
+                      </td>
+                    </tr>
+                  )}
                 </tfoot>
               </table>
             </div>

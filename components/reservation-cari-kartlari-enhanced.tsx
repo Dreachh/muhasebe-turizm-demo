@@ -63,6 +63,7 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
   const [availableCompanies, setAvailableCompanies] = useState<any[]>([]);
   const [destinations, setDestinations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [detailsLoading, setDetailsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState<"all" | "debt" | "credit">("all");
   const [showNewCariDialog, setShowNewCariDialog] = useState(false);
@@ -102,95 +103,45 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
     filterCariList();
   }, [cariList, searchTerm, filterType]);
 
-  // Otomatik güncelleme sistemi - cari detayları için
+  // Otomatik güncelleme sistemi - sadece açık cari detayları için - KALDIRILDI
+  // Artık sadece manuel yenileme ve yeni kayıt eklendiğinde güncelleme yapılacak
+
+  // Ana cari listesini otomatik güncelle - SADECE BAŞLANGIÇTA
   useEffect(() => {
-    if (expandedCariIds.size === 0) return;
+    // Sadece sayfa ilk yüklendiğinde çalışır, sonrasında manuel güncelleme
+    const initialLoad = setTimeout(() => {
+      loadCariList();
+    }, 1000);
 
-    const autoRefreshInterval = setInterval(async () => {
-      const expandedIds = Array.from(expandedCariIds);
-      for (const cariId of expandedIds) {
-        try {
-          const [borclar, odemeler, detayliListe] = await Promise.all([
-            ReservationCariService.getBorcDetaysByCariId(cariId),
-            ReservationCariService.getOdemeDetaysByCariId(cariId),
-            ReservationCariService.getBorcDetaylarWithReservationInfo(cariId)
-          ]);
-          
-          setCariDetails(prev => ({
-            ...prev,
-            [cariId]: { borclar, odemeler, detayliListe }
-          }));
-        } catch (error) {
-          console.error(`Otomatik güncelleme hatası (${cariId}):`, error);
-        }
-      }
-    }, 10000); // 10 saniyede bir güncelle
+    return () => clearTimeout(initialLoad);
+  }, [period]); // Sadece period değiştiğinde çalışır
 
-    return () => clearInterval(autoRefreshInterval);
-  }, [expandedCariIds]);
-
-  // Cari listesini otomatik güncelle
-  useEffect(() => {
-    const cariListRefreshInterval = setInterval(async () => {
-      try {
-        const data = await ReservationCariService.getAllCari(period);
-        setCariList(data);
-        // İstatistikleri de güncelle
-        await loadStatistics();
-      } catch (error) {
-        console.error("Otomatik cari listesi güncelleme hatası:", error);
-      }
-    }, 30000); // 30 saniyede bir güncelle
-
-    return () => clearInterval(cariListRefreshInterval);
-  }, [period]);
-
-  // Otomatik yenileme - her 30 saniyede bir kontrol et
-  useEffect(() => {
-    const autoRefreshInterval = setInterval(async () => {
-      try {
-        // Sadece açık olan cari detaylarını yenile
-        const expandedIds = Array.from(expandedCariIds);
-        if (expandedIds.length > 0) {
-          for (const cariId of expandedIds) {
-            try {
-              const detayliListe = await ReservationCariService.getBorcDetaylarWithReservationInfo(cariId);
-              setCariDetails(prev => ({
-                ...prev,
-                [cariId]: { 
-                  ...prev[cariId], 
-                  detayliListe 
-                }
-              }));
-            } catch (error) {
-              console.error(`Otomatik yenileme hatası (${cariId}):`, error);
-            }
-          }
-        }
-        
-        // Ana cari listesini de sessizce yenile
-        const updatedCariList = await ReservationCariService.getAllCari(period);
-        setCariList(updatedCariList);
-        
-        // İstatistikleri güncelle
-        await loadStatistics();
-      } catch (error) {
-        console.error("Otomatik yenileme hatası:", error);
-      }
-    }, 30000); // 30 saniye
-
-    return () => clearInterval(autoRefreshInterval);
-  }, [period, expandedCariIds]);
-
-  // Toplam değerleri hesapla
+  // Toplam değerleri hesapla - TÜM cari detaylarından para birimi bazında (SABİT DEĞERLER)
   const totals = useMemo(() => {
-    return cariList.reduce((acc, cari) => {
-      acc.totalDebt += cari.totalDebt || 0;
-      acc.totalPayment += cari.totalPayment || 0;
-      acc.totalBalance += cari.balance || 0;
-      return acc;
-    }, { totalDebt: 0, totalPayment: 0, totalBalance: 0 });
-  }, [cariList]);
+    const currencyTotals: Record<string, { totalDebt: number; totalPayment: number; totalBalance: number }> = {};
+    
+    // Tüm cari detaylarından borç kayıtlarını para birimi bazında topla
+    Object.values(cariDetails).forEach(detail => {
+      if (detail.borclar && detail.borclar.length > 0) {
+        detail.borclar.forEach((borc: any) => {
+          const currency = borc.paraBirimi || 'EUR';
+          if (!currencyTotals[currency]) {
+            currencyTotals[currency] = { totalDebt: 0, totalPayment: 0, totalBalance: 0 };
+          }
+          currencyTotals[currency].totalDebt += borc.tutar || 0;
+          currencyTotals[currency].totalPayment += borc.odeme || 0;
+        });
+      }
+    });
+    
+    // Bakiyeleri hesapla
+    Object.values(currencyTotals).forEach(values => {
+      values.totalBalance = values.totalDebt - values.totalPayment;
+    });
+    
+    // Eğer hiç detay yoksa varsayılan olarak boş obje döndür
+    return currencyTotals;
+  }, [cariDetails]);
 
   // İstatistik değerleri - backend'den al
   const [statistics, setStatistics] = useState({
@@ -260,6 +211,43 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
       const data = await ReservationCariService.getAllCari(period);
       setCariList(data);
       
+      // Tüm cari detaylarını toplu yükle (toplam hesaplamaları için)
+      setDetailsLoading(true);
+      try {
+        const allDetails = await Promise.all(
+          data.map(async (cari) => {
+            try {
+              const [borclar, odemeler] = await Promise.all([
+                ReservationCariService.getBorcDetaysByCariId(cari.id!),
+                ReservationCariService.getOdemeDetaysByCariId(cari.id!)
+              ]);
+              return {
+                cariId: cari.id!,
+                details: { borclar, odemeler, detayliListe: [] }
+              };
+            } catch (error) {
+              console.error(`Cari detayları yüklenirken hata (${cari.companyName}):`, error);
+              return {
+                cariId: cari.id!,
+                details: { borclar: [], odemeler: [], detayliListe: [] }
+              };
+            }
+          })
+        );
+
+        // Tüm detayları tek seferde state'e yaz
+        const newCariDetails: Record<string, any> = {};
+        allDetails.forEach(({ cariId, details }) => {
+          newCariDetails[cariId] = details;
+        });
+        
+        setCariDetails(newCariDetails);
+      } catch (error) {
+        console.error("Cari detayları toplu yükleme hatası:", error);
+      } finally {
+        setDetailsLoading(false);
+      }
+      
       // İstatistikleri de yükle
       await loadStatistics();
     } catch (error) {
@@ -273,6 +261,8 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
       setLoading(false);
     }
   };
+
+  // Cari detayları artık loadCariList'te yükleniyor
 
   // Cari kartını sil - otomatik güncelleme ile
   const handleDeleteCari = async (cari: ReservationCari) => {
@@ -342,28 +332,29 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
     const newExpandedIds = new Set(expandedCariIds);
     
     if (expandedCariIds.has(cariId)) {
+      // Cari kapatılıyor
       newExpandedIds.delete(cariId);
     } else {
+      // Cari açılıyor
       newExpandedIds.add(cariId);
       
-      // Veriler henüz yüklenmemişse yükle
-      if (!cariDetails[cariId]) {
+      // Sadece detaylı liste yüklenmemişse yükle (borç ve ödeme zaten var)
+      if (cariDetails[cariId] && !cariDetails[cariId].detayliListe.length) {
         try {
-          const [borclar, odemeler, detayliListe] = await Promise.all([
-            ReservationCariService.getBorcDetaysByCariId(cariId),
-            ReservationCariService.getOdemeDetaysByCariId(cariId),
-            ReservationCariService.getBorcDetaylarWithReservationInfo(cariId)
-          ]);
+          const detayliListe = await ReservationCariService.getBorcDetaylarWithReservationInfo(cariId);
           
           setCariDetails(prev => ({
             ...prev,
-            [cariId]: { borclar, odemeler, detayliListe }
+            [cariId]: { 
+              ...prev[cariId], 
+              detayliListe 
+            }
           }));
         } catch (error) {
-          console.error("Cari detayları yüklenirken hata:", error);
+          console.error("Detaylı liste yüklenirken hata:", error);
           toast({
             title: "Hata",
-            description: "Cari detayları yüklenirken bir hata oluştu",
+            description: "Rezervasyon detayları yüklenirken bir hata oluştu",
             variant: "destructive",
           });
         }
@@ -480,20 +471,29 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
         fisNumarasi: "",
       });
 
-      // Verileri yeniden yükle
-      loadCariList();
-      // Detayları da yeniden yükle
+      // SADECE ödeme eklenen carinin detaylarını güncelle - liste ve diğer cariler dokunulmasın
       const cariId = selectedBorcForPayment.cariId;
-      const [borclar, odemeler, detayliListe] = await Promise.all([
-        ReservationCariService.getBorcDetaysByCariId(cariId),
-        ReservationCariService.getOdemeDetaysByCariId(cariId),
-        ReservationCariService.getBorcDetaylarWithReservationInfo(cariId)
-      ]);
-      
-      setCariDetails(prev => ({
-        ...prev,
-        [cariId]: { borclar, odemeler, detayliListe }
-      }));
+      try {
+        const [borclar, odemeler, detayliListe] = await Promise.all([
+          ReservationCariService.getBorcDetaysByCariId(cariId),
+          ReservationCariService.getOdemeDetaysByCariId(cariId),
+          ReservationCariService.getBorcDetaylarWithReservationInfo(cariId)
+        ]);
+        
+        // Sadece bu carinin detaylarını güncelle
+        setCariDetails(prev => ({
+          ...prev,
+          [cariId]: { borclar, odemeler, detayliListe }
+        }));
+
+        // Ana cari listesinde sadece bu carinin toplamlarını güncelle
+        const updatedCari = await ReservationCariService.getCariById(cariId);
+        if (updatedCari) {
+          setCariList(prev => prev.map(c => c.id === cariId ? updatedCari : c));
+        }
+      } catch (error) {
+        console.error("Detay güncelleme hatası:", error);
+      }
     } catch (error) {
       console.error("Ödeme eklenirken hata:", error);
       toast({
@@ -509,9 +509,11 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
   };
 
   const formatCurrency = (amount: number, currency = "EUR") => {
+    // Map common currency codes if needed (e.g., TL to ISO TRY)
+    const isoCode = currency === 'TL' ? 'TRY' : currency;
     return new Intl.NumberFormat('tr-TR', {
       style: 'currency',
-      currency: currency
+      currency: isoCode
     }).format(amount);
   };
 
@@ -581,7 +583,7 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
           <p className="text-gray-600">Dönem: {period}</p>
         </div>
         
-        {/* İstatistik Kartları ve Yeni Cari Butonu - Tek Satırda */}
+        {/* İstatistik Kartları ve Butonlar - Tek Satırda */}
         <div className="flex items-center gap-4">
           {/* İstatistik Kartları */}
           <div className="flex gap-2">
@@ -603,99 +605,116 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
             </div>
           </div>
           
-          {/* Yeni Cari Butonu */}
-          <Dialog open={showNewCariDialog} onOpenChange={setShowNewCariDialog}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="w-4 h-4 mr-2" />
-                Yeni Cari
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>Yeni Cari Oluştur</DialogTitle>
-              </DialogHeader>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Şirket Adı *</Label>
-                  <Select 
-                    value={newCariForm.companyName} 
-                    onValueChange={handleCompanySelect}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Şirket seçin" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableCompanies.map((company) => (
-                        <SelectItem key={company.id} value={company.name || company.companyName}>
-                          {company.name || company.companyName}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>İletişim Kişisi</Label>
-                  <Input
-                    value={newCariForm.contactPerson}
-                    onChange={(e) => setNewCariForm({...newCariForm, contactPerson: e.target.value})}
-                    placeholder="İletişim kişisi"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Telefon</Label>
-                  <Input
-                    value={newCariForm.contactPhone}
-                    onChange={(e) => setNewCariForm({...newCariForm, contactPhone: e.target.value})}
-                    placeholder="Telefon numarası"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>E-posta</Label>
-                  <Input
-                    type="email"
-                    value={newCariForm.contactEmail}
-                    onChange={(e) => setNewCariForm({...newCariForm, contactEmail: e.target.value})}
-                    placeholder="E-posta adresi"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Vergi Numarası</Label>
-                  <Input
-                    value={newCariForm.taxNumber}
-                    onChange={(e) => setNewCariForm({...newCariForm, taxNumber: e.target.value})}
-                    placeholder="Vergi numarası"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Adres</Label>
-                  <Textarea
-                    value={newCariForm.address}
-                    onChange={(e) => setNewCariForm({...newCariForm, address: e.target.value})}
-                    placeholder="Adres bilgisi"
-                    rows={3}
-                  />
-                </div>
-                <div className="col-span-2 space-y-2">
-                  <Label>Notlar</Label>
-                  <Textarea
-                    value={newCariForm.notes}
-                    onChange={(e) => setNewCariForm({...newCariForm, notes: e.target.value})}
-                    placeholder="Ek notlar"
-                    rows={2}
-                  />
-                </div>
-              </div>
-              <div className="flex justify-end gap-2 mt-4">
-                <Button variant="outline" onClick={() => setShowNewCariDialog(false)}>
-                  İptal
+          {/* Butonlar */}
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => {
+                setRefreshing(true);
+                loadCariList().finally(() => setRefreshing(false));
+              }}
+              disabled={refreshing}
+            >
+              {refreshing ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <RefreshCw className="w-4 h-4" />
+              )}
+            </Button>
+            <Dialog open={showNewCariDialog} onOpenChange={setShowNewCariDialog}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Yeni Cari
                 </Button>
-                <Button onClick={handleCreateCari}>
-                  Oluştur
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle>Yeni Cari Oluştur</DialogTitle>
+                </DialogHeader>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Şirket Adı *</Label>
+                    <Select 
+                      value={newCariForm.companyName} 
+                      onValueChange={handleCompanySelect}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Şirket seçin" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableCompanies.map((company) => (
+                          <SelectItem key={company.id} value={company.name || company.companyName}>
+                            {company.name || company.companyName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>İletişim Kişisi</Label>
+                    <Input
+                      value={newCariForm.contactPerson}
+                      onChange={(e) => setNewCariForm({...newCariForm, contactPerson: e.target.value})}
+                      placeholder="İletişim kişisi"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Telefon</Label>
+                    <Input
+                      value={newCariForm.contactPhone}
+                      onChange={(e) => setNewCariForm({...newCariForm, contactPhone: e.target.value})}
+                      placeholder="Telefon numarası"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>E-posta</Label>
+                    <Input
+                      type="email"
+                      value={newCariForm.contactEmail}
+                      onChange={(e) => setNewCariForm({...newCariForm, contactEmail: e.target.value})}
+                      placeholder="E-posta adresi"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Vergi Numarası</Label>
+                    <Input
+                      value={newCariForm.taxNumber}
+                      onChange={(e) => setNewCariForm({...newCariForm, taxNumber: e.target.value})}
+                      placeholder="Vergi numarası"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Adres</Label>
+                    <Textarea
+                      value={newCariForm.address}
+                      onChange={(e) => setNewCariForm({...newCariForm, address: e.target.value})}
+                      placeholder="Adres bilgisi"
+                      rows={3}
+                    />
+                  </div>
+                  <div className="col-span-2 space-y-2">
+                    <Label>Notlar</Label>
+                    <Textarea
+                      value={newCariForm.notes}
+                      onChange={(e) => setNewCariForm({...newCariForm, notes: e.target.value})}
+                      placeholder="Ek notlar"
+                      rows={2}
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 mt-4">
+                  <Button variant="outline" onClick={() => setShowNewCariDialog(false)}>
+                    İptal
+                  </Button>
+                  <Button onClick={handleCreateCari}>
+                    Oluştur
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
       </div>
 
@@ -743,11 +762,27 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
             <Card className="border-l-4 border-l-red-500">
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
-                  <div>
+                  <div className="flex-1">
                     <p className="text-sm font-medium text-red-600">Toplam Borç</p>
-                    <p className="text-2xl font-bold text-red-700">
-                      €{totals.totalDebt.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
-                    </p>
+                    {detailsLoading ? (
+                      <div className="flex items-center gap-2 mt-2">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span className="text-sm text-gray-500">Yükleniyor...</span>
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        {Object.entries(totals).map(([currency, values]) => (
+                          <p key={currency} className="text-lg font-bold text-red-700">
+                            {formatCurrency(values.totalDebt, currency)}
+                          </p>
+                        ))}
+                        {Object.keys(totals).length === 0 && (
+                          <p className="text-2xl font-bold text-red-700">
+                            {formatCurrency(0, 'EUR')}
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div className="p-3 bg-red-100 rounded-full">
                     <CreditCard className="w-6 h-6 text-red-600" />
@@ -760,11 +795,27 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
             <Card className="border-l-4 border-l-green-500">
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
-                  <div>
+                  <div className="flex-1">
                     <p className="text-sm font-medium text-green-600">Toplam Ödeme</p>
-                    <p className="text-2xl font-bold text-green-700">
-                      €{totals.totalPayment.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
-                    </p>
+                    {detailsLoading ? (
+                      <div className="flex items-center gap-2 mt-2">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span className="text-sm text-gray-500">Yükleniyor...</span>
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        {Object.entries(totals).map(([currency, values]) => (
+                          <p key={currency} className="text-lg font-bold text-green-700">
+                            {formatCurrency(values.totalPayment, currency)}
+                          </p>
+                        ))}
+                        {Object.keys(totals).length === 0 && (
+                          <p className="text-2xl font-bold text-green-700">
+                            {formatCurrency(0, 'EUR')}
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div className="p-3 bg-green-100 rounded-full">
                     <Euro className="w-6 h-6 text-green-600" />
@@ -774,22 +825,45 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
             </Card>
 
             {/* Net Bakiye */}
-            <Card className={`border-l-4 ${totals.totalBalance >= 0 ? 'border-l-orange-500' : 'border-l-blue-500'}`}>
+            <Card className="border-l-4 border-l-orange-500">
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
-                  <div>
-                    <p className={`text-sm font-medium ${totals.totalBalance >= 0 ? 'text-orange-600' : 'text-blue-600'}`}>
-                      Net Bakiye
-                    </p>
-                    <p className={`text-2xl font-bold ${totals.totalBalance >= 0 ? 'text-orange-700' : 'text-blue-700'}`}>
-                      €{Math.abs(totals.totalBalance).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
-                    </p>
-                    <p className={`text-xs ${totals.totalBalance >= 0 ? 'text-orange-500' : 'text-blue-500'}`}>
-                      {totals.totalBalance >= 0 ? 'Alacak' : 'Borç'}
-                    </p>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-orange-600">Net Bakiye</p>
+                    {detailsLoading ? (
+                      <div className="flex items-center gap-2 mt-2">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span className="text-sm text-gray-500">Yükleniyor...</span>
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        {Object.entries(totals).map(([currency, values]) => {
+                          const balance = values.totalBalance;
+                          const isPositive = balance >= 0;
+                          return (
+                            <div key={currency} className="flex items-center gap-2">
+                              <p className={`text-lg font-bold ${isPositive ? 'text-orange-700' : 'text-blue-700'}`}>
+                                {formatCurrency(Math.abs(balance), currency)}
+                              </p>
+                              <p className={`text-xs ${isPositive ? 'text-orange-500' : 'text-blue-500'}`}>
+                                {isPositive ? 'Alacak' : 'Borç'}
+                              </p>
+                            </div>
+                          );
+                        })}
+                        {Object.keys(totals).length === 0 && (
+                          <div className="flex items-center gap-2">
+                            <p className="text-2xl font-bold text-orange-700">
+                              {formatCurrency(0, 'EUR')}
+                            </p>
+                            <p className="text-xs text-orange-500">Alacak</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  <div className={`p-3 ${totals.totalBalance >= 0 ? 'bg-orange-100' : 'bg-blue-100'} rounded-full`}>
-                    <Building2 className={`w-6 h-6 ${totals.totalBalance >= 0 ? 'text-orange-600' : 'text-blue-600'}`} />
+                  <div className="p-3 bg-orange-100 rounded-full">
+                    <Building2 className="w-6 h-6 text-orange-600" />
                   </div>
                 </div>
               </CardContent>
@@ -857,26 +931,58 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
                       
                       {/* Sağ taraf - Finansal bilgiler ve yazdırma */}
                       <div className="flex items-center gap-6">
-                        <div className="text-right">
-                          <div className="text-sm text-gray-600">Toplam Borç</div>
-                          <div className="font-semibold text-red-600">
-                            {formatCurrency(cari.totalDebt)}
-                          </div>
-                        </div>
-                        
-                        <div className="text-right">
-                          <div className="text-sm text-gray-600">Toplam Ödeme</div>
-                          <div className="font-semibold text-green-600">
-                            {formatCurrency(cari.totalPayment)}
-                          </div>
-                        </div>
-                        
-                        <div className="text-right">
-                          <div className="text-sm text-gray-600">Bakiye</div>
-                          <div className={`font-bold text-lg ${getBalanceColor(cari.balance)}`}>
-                            {formatCurrency(Math.abs(cari.balance))}
-                          </div>
-                        </div>
+                        {/* Para birimi bazında toplamları göster */}
+                        {details && details.borclar.length > 0 ? (
+                          (() => {
+                            // Bu cariye ait para birimi toplamlarını hesapla
+                            const cariCurrencyTotals: { [key: string]: { debt: number; payment: number; balance: number } } = {};
+                            details.borclar.forEach((borc: any) => {
+                              const currency = borc.paraBirimi || 'EUR';
+                              if (!cariCurrencyTotals[currency]) {
+                                cariCurrencyTotals[currency] = { debt: 0, payment: 0, balance: 0 };
+                              }
+                              cariCurrencyTotals[currency].debt += borc.tutar || 0;
+                              cariCurrencyTotals[currency].payment += borc.odeme || 0;
+                              cariCurrencyTotals[currency].balance += (borc.tutar || 0) - (borc.odeme || 0);
+                            });
+                            
+                            return (
+                              <div className="flex items-center gap-4">
+                                {Object.entries(cariCurrencyTotals).map(([currency, totals]) => (
+                                  <div key={currency} className="text-right">
+                                    <div className="text-xs text-gray-600">{currency} Bakiye</div>
+                                    <div className={`font-bold text-sm ${totals.balance > 0 ? 'text-red-600' : totals.balance < 0 ? 'text-green-600' : 'text-gray-600'}`}>
+                                      {formatCurrency(Math.abs(totals.balance), currency)}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            );
+                          })()
+                        ) : (
+                          <>
+                            <div className="text-right">
+                              <div className="text-sm text-gray-600">Toplam Borç</div>
+                              <div className="font-semibold text-red-600">
+                                {formatCurrency(cari.totalDebt)}
+                              </div>
+                            </div>
+                            
+                            <div className="text-right">
+                              <div className="text-sm text-gray-600">Toplam Ödeme</div>
+                              <div className="font-semibold text-green-600">
+                                {formatCurrency(cari.totalPayment)}
+                              </div>
+                            </div>
+                            
+                            <div className="text-right">
+                              <div className="text-sm text-gray-600">Bakiye</div>
+                              <div className={`font-bold text-lg ${getBalanceColor(cari.balance)}`}>
+                                {formatCurrency(Math.abs(cari.balance))}
+                              </div>
+                            </div>
+                          </>
+                        )}
                         
                         <div className="flex flex-col items-center gap-2">
                           {getBalanceBadge(cari.balance)}
