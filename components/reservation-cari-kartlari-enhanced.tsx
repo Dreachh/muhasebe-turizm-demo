@@ -90,7 +90,6 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
     endDate: string;
     isActive: boolean;
   }>>({});
-  
   const router = useRouter();
 
   // Yeni cari formu
@@ -200,7 +199,6 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
       }
     }));
   };
-
   useEffect(() => {
     loadCariList();
     loadAvailableCompanies();
