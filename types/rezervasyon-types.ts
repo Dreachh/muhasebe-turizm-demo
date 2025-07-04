@@ -43,6 +43,10 @@ export interface Rezervasyon {
   paraBirimi: string;
   odemeTarihi: string;
   odemeNotlari: string;
+  /**
+   * Ödeme anındaki genel bakiye (ilgili para biriminde), geçmiş işlemler değişse bile sabit kalır.
+   */
+  cariBakiye?: number;
   notlar: string;
   ozelIstekler: string;
   katilimcilar: Katilimci[];

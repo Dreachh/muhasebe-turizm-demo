@@ -66,6 +66,10 @@ export interface ReservationOdemeDetay {
   aciklama: string; // Ödeme açıklaması
   odemeYontemi?: string; // Ödeme yöntemi
   fisNumarasi?: string; // Fiş numarası
+  /**
+   * Ödeme anındaki genel bakiye (ilgili para biriminde), geçmiş işlemler değişse bile sabit kalır.
+   */
+  cariBakiye?: number;
   createdAt: Timestamp;
   period: string;
 }

@@ -25,6 +25,89 @@ export default function ReservationCariPrintPage() {
   const [odemeDetaylar, setOdemeDetaylar] = useState<ReservationOdemeDetay[]>([]);
   const [loading, setLoading] = useState(true);
   const [companyInfo, setCompanyInfo] = useState<any>({});
+  
+  // Para birimi bazlı cari bakiye hesaplama fonksiyonu (Son Ödemeler tablosundaki mantık)
+  const getCurrentBalanceForCurrency = (currency: string): number => {
+    if (!detayliListe || !odemeDetaylar) return 0;
+
+    let balance = 0;
+    
+    // Borçları topla (sadece seçilen para birimi)
+    detayliListe.forEach((borc: any) => {
+      if ((borc.paraBirimi || 'EUR') === currency) {
+        balance += (borc.tutar || 0) - (borc.odeme || 0);
+      }
+    });
+    
+    // Genel ödemeleri çıkar (sadece seçilen para birimi)
+    odemeDetaylar.forEach((odeme: any) => {
+      const isGeneralPayment = !odeme.reservationId || odeme.reservationId.trim() === '';
+      if (isGeneralPayment && (odeme.paraBirimi || 'EUR') === currency) {
+        balance -= odeme.tutar || 0;
+      }
+    });
+    
+    return balance;
+  };
+  
+  // Rezervasyon ve ödeme verilerini birleştir
+  const combinedData = useMemo(() => {
+    const combined: any[] = [];
+    
+    // Rezervasyon verilerini ekle
+    detayliListe.forEach(item => {
+      combined.push({
+        ...item,
+        type: 'reservation',
+        sortDate: new Date(item.turTarih || item.odemeTarih)
+      });
+    });
+    
+    // Ödeme verilerini ekle (sadece genel ödemeler - rezervasyon bağlantılı olmayanlar)
+    odemeDetaylar.forEach(odeme => {
+      const isGeneralPayment = !odeme.reservationId || odeme.reservationId.trim() === '';
+      if (isGeneralPayment) {
+        const isRefund = (odeme.tutar || 0) < 0;
+        const isTahsilat = (odeme.tutar || 0) > 0;
+        const paraBirimi = (odeme as any).paraBirimi || 'EUR';
+        
+        // Ödeme sonrası bakiye (cariBakiye - bu ödeme yapıldıktan sonraki durum)
+        const odemeSonrasiBakiye = (odeme as any).cariBakiye || 0;
+        
+        // Yapılan ödeme miktarı (mutlak değer)
+        const odemeMiktari = Math.abs(odeme.tutar || 0);
+        
+        // Ödeme öncesi bakiye hesaplama:
+        // cariBakiye + ödeme tutarı = ödeme öncesi durum
+        // (çünkü tahsilat borcu azaltır, iade borcu artırır)
+        const odemeOncesiBakiye = odemeSonrasiBakiye + (odeme.tutar || 0);
+        
+        combined.push({
+          id: `payment_${odeme.id}`,
+          type: 'payment',
+          sortDate: new Date(odeme.tarih),
+          // Ödeme verileri için mapping
+          turTarih: null, // T.TARİHİ boş
+          odemeTarih: odeme.tarih, // Ö.TARİHİ
+          musteri: odeme.aciklama || '', // MÜŞTERİ - açıklama
+          destinasyon: '', // DEST. boş
+          kisi: '', // KİŞİ boş  
+          alisYeri: '', // ALIŞ boş
+          tur: isRefund ? 'İade' : isTahsilat ? 'Tahsilat' : 'Ödeme', // TÜR
+          odemeYontemi: odeme.odemeYontemi || '', // Ö.YÖNTEMİ
+          firma: isRefund ? 'Nehir Turizm' : cari?.companyName || '', // FİRMA
+          tutar: Math.abs(odemeOncesiBakiye), // CARİ - ödeme öncesi borç durumu
+          odeme: odemeMiktari, // ÖDEME miktarı
+          odemeYapan: (odeme as any).odemeYapan || '', // ÖDEME YAPAN
+          kalan: Math.abs(odemeSonrasiBakiye), // KALAN - ödeme sonrası borç durumu
+          paraBirimi: paraBirimi
+        });
+      }
+    });
+    
+    // Tarihe göre sırala (eskiden yeniye)
+    return combined.sort((a, b) => a.sortDate.getTime() - b.sortDate.getTime());
+  }, [detayliListe, odemeDetaylar, cari]);
 
   useEffect(() => {
     if (cariId) {
@@ -106,7 +189,7 @@ export default function ReservationCariPrintPage() {
   const currencyTotals = useMemo(() => {
     const totals: { [key: string]: { debt: number; payment: number; balance: number } } = {};
     
-    // Detaylı listeden para birimi bazında toplamları hesapla
+    // Sadece rezervasyon verilerinden toplamları hesapla (ödemeler ayrı işleniyor)
     detayliListe.forEach(item => {
       const currency = item.paraBirimi || 'EUR';
       if (!totals[currency]) {
@@ -118,8 +201,21 @@ export default function ReservationCariPrintPage() {
       totals[currency].balance += (item.tutar || 0) - (item.odeme || 0);
     });
     
+    // Genel ödemeleri de bakiye hesaplamasına dahil et
+    odemeDetaylar.forEach(odeme => {
+      const isGeneralPayment = !odeme.reservationId || odeme.reservationId.trim() === '';
+      if (isGeneralPayment) {
+        const currency = (odeme as any).paraBirimi || 'EUR';
+        if (!totals[currency]) {
+          totals[currency] = { debt: 0, payment: 0, balance: 0 };
+        }
+        // Genel ödemeler bakiyeyi etkiler (pozitif = tahsilat, negatif = iade)
+        totals[currency].balance -= odeme.tutar || 0;
+      }
+    });
+    
     return totals;
-  }, [detayliListe]);
+  }, [detayliListe, odemeDetaylar]);
 
   const formatDate = (dateString: string | Date | any) => {
     try {
@@ -263,7 +359,7 @@ export default function ReservationCariPrintPage() {
                   ))}
                   <span className="text-gray-400 mx-2">|</span>
                   <span className="text-gray-600">Rezervasyon:</span>
-                  <span className="font-bold text-blue-600">{detayliListe.length} adet</span>
+                  <span className="font-bold text-blue-600">{combinedData.filter(item => item.type === 'reservation').length} adet</span>
                 </div>
               ) : (
                 <>
@@ -276,7 +372,7 @@ export default function ReservationCariPrintPage() {
               )}
             </div>
           </div>
-          {detayliListe.length > 0 ? (
+          {combinedData.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="w-full border-collapse border border-gray-300 text-xs">
                 <thead>
@@ -287,42 +383,50 @@ export default function ReservationCariPrintPage() {
                     <th className="border border-gray-300 px-1 py-1 text-center text-[10px] font-bold">DEST.</th>
                     <th className="border border-gray-300 px-1 py-1 text-center text-[10px] font-bold">KİŞİ</th>
                     <th className="border border-gray-300 px-1 py-1 text-center text-[10px] font-bold">ALIŞ</th>
+                    <th className="border border-gray-300 px-1 py-1 text-center text-[10px] font-bold">TÜR</th>
+                    <th className="border border-gray-300 px-1 py-1 text-center text-[10px] font-bold">Ö.YÖNTEMİ</th>
                     <th className="border border-gray-300 px-1 py-1 text-center text-[10px] font-bold">FİRMA</th>
-                    <th className="border border-gray-300 px-1 py-1 text-center text-[10px] font-bold">TUTAR</th>
+                    <th className="border border-gray-300 px-1 py-1 text-center text-[10px] font-bold">CARİ</th>
                     <th className="border border-gray-300 px-1 py-1 text-center text-[10px] font-bold">ÖDEME/YAPAN</th>
                     <th className="border border-gray-300 px-1 py-1 text-center text-[10px] font-bold">KALAN</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {detayliListe.map((item, index) => (
-                    <tr key={item.id} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} h-8`}>
+                  {combinedData.map((item, index) => (
+                    <tr key={item.id} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} h-8 ${item.type === 'payment' ? 'bg-blue-25' : ''}`}>
                       <td className="border border-gray-300 px-1 py-0.5 text-center text-[10px]">
-                        {formatDate(item.turTarih)}
+                        {item.turTarih ? formatDate(item.turTarih) : '-'}
                       </td>
                       <td className="border border-gray-300 px-1 py-0.5 text-center text-[10px]">
                         {item.odemeTarih || item.odemeTarihi ? formatDate(item.odemeTarih || item.odemeTarihi) : "-"}
                       </td>
                       <td className="border border-gray-300 px-1 py-0.5 text-[10px] leading-tight">
-                        {item.musteri}
+                        {item.musteri || '-'}
                       </td>
                       <td className="border border-gray-300 px-1 py-0.5 text-center text-[10px]">
-                        {item.destinasyon}
+                        {item.destinasyon || '-'}
                       </td>
                       <td className="border border-gray-300 px-1 py-0.5 text-center text-[10px]">
-                        {item.kisi}
+                        {item.kisi || '-'}
                       </td>
                       <td className="border border-gray-300 px-1 py-0.5 text-[10px] leading-tight">
                         {item.alisYeriDetay || item.alisYeri || "-"}
                       </td>
+                      <td className="border border-gray-300 px-1 py-0.5 text-center text-[10px]">
+                        {item.tur || item.type || "Rezervasyon"}
+                      </td>
+                      <td className="border border-gray-300 px-1 py-0.5 text-center text-[10px]">
+                        {item.odemeYontemi || "-"}
+                      </td>
                       <td className="border border-gray-300 px-1 py-0.5 text-[10px] leading-tight">
-                        {item.firma}
+                        {item.firma || '-'}
                       </td>
                       <td className="border border-gray-300 px-1 py-0.5 text-right text-[10px]">
-                        {formatCurrency(item.tutar, item.paraBirimi)}
+                        {item.tutar ? formatCurrency(item.tutar, item.paraBirimi) : '-'}
                       </td>
                       <td className="border border-gray-300 px-1 py-0.5 text-center text-[10px] leading-tight">
                         <div>
-                          {formatCurrency(item.odeme, item.paraBirimi)}
+                          {item.odeme ? formatCurrency(item.odeme, item.paraBirimi) : '-'}
                           {item.odemeYapan && (
                             <div className="text-[8px] text-gray-600">
                               {item.odemeYapan}
@@ -331,7 +435,7 @@ export default function ReservationCariPrintPage() {
                         </div>
                       </td>
                       <td className="border border-gray-300 px-1 py-0.5 text-right text-[10px]">
-                        {formatCurrency(item.kalan, item.paraBirimi)}
+                        {item.kalan !== undefined ? formatCurrency(item.kalan, item.paraBirimi) : '-'}
                       </td>
                     </tr>
                   ))}
@@ -339,7 +443,7 @@ export default function ReservationCariPrintPage() {
                 <tfoot>
                   {Object.entries(currencyTotals).map(([currency, totals], index) => (
                     <tr key={currency} className="bg-gray-200 font-bold h-8">
-                      <td colSpan={7} className="border border-gray-300 px-1 py-0.5 text-right text-[10px]">
+                      <td colSpan={9} className="border border-gray-300 px-1 py-0.5 text-right text-[10px]">
                         {index === 0 ? 'TOPLAM:' : ''} {currency}
                       </td>
                       <td className="border border-gray-300 px-1 py-0.5 text-right text-[10px]">
@@ -374,7 +478,7 @@ export default function ReservationCariPrintPage() {
             </div>
           ) : (
             <div className="text-center py-8 text-gray-500 border border-gray-200 rounded-lg">
-              Bu cari kartında henüz rezervasyon bulunmamaktadır.
+              Bu cari kartında henüz rezervasyon ve ödeme bulunmamaktadır.
             </div>
           )}
         </div>
@@ -412,6 +516,10 @@ export default function ReservationCariPrintPage() {
           @page {
             margin: 0.5in;
             size: A4;
+          }
+          
+          .bg-blue-25 {
+            background-color: #f0f8ff !important;
           }
           
           .bg-red-50 {
