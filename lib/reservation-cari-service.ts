@@ -59,14 +59,19 @@ export interface ReservationBorcDetay {
 export interface ReservationOdemeDetay {
   id?: string;
   cariId: string; // Hangi cariye ait
-  borcId: string; // Hangi borç kaydına ait
-  reservationId: string; // Rezervasyon ID'si
+  borcId?: string | null; // Hangi borç kaydına ait (genel ödemeler için null olabilir)
+  reservationId?: string | null; // Rezervasyon ID'si (genel ödemeler için null olabilir)
   tutar: number; // Ödeme tutarı
   tarih: string; // Ödeme tarihi
   aciklama: string; // Ödeme açıklaması
   odemeYontemi?: string; // Ödeme yöntemi
   odemeYapan?: string; // Ödemeyi yapan kişi
   fisNumarasi?: string; // Fiş numarası
+  paraBirimi?: string; // Para birimi
+  /**
+   * Ödeme anındaki genel bakiye (ilgili para biriminde), geçmiş işlemler değişse bile sabit kalır.
+   */
+  cariBakiye?: number;
   createdAt: Timestamp;
   period: string;
 }
@@ -242,7 +247,7 @@ export class ReservationCariService {
     }
   }
 
-  // Cari bakiyesini güncelle
+  // Cari bakiyesini güncelle - GENEL ÖDEMELERİ DE DAHİL ET
   static async updateCariBalance(cariId: string): Promise<void> {
     try {
       const db = this.getFirestore();
@@ -254,16 +259,40 @@ export class ReservationCariService {
       );
       const borclarSnapshot = await getDocs(borclarQuery);
       
-      let totalDebt = 0;
-      let totalPayment = 0;
+      // Bu cariye ait tüm genel ödemeleri de getir
+      const odemelerQuery = query(
+        collection(db, COLLECTIONS.reservation_cari_odemeler),
+        where("cariId", "==", cariId)
+      );
+      const odemelerSnapshot = await getDocs(odemelerQuery);
       
+      let totalDebt = 0;
+      let totalPaymentFromDebts = 0;
+      let totalGeneralPayments = 0;
+      
+      // Borçlardan toplam borç ve ödeme hesapla
       borclarSnapshot.docs.forEach(doc => {
         const borc = doc.data() as ReservationBorcDetay;
         totalDebt += borc.tutar;
-        totalPayment += borc.odeme;
+        totalPaymentFromDebts += borc.odeme;
       });
-
+      
+      // Genel ödemeleri hesapla (pozitif = tahsilat, negatif = iade)
+      odemelerSnapshot.docs.forEach(doc => {
+        const odeme = doc.data() as ReservationOdemeDetay;
+        totalGeneralPayments += odeme.tutar; // Pozitif tahsilat, negatif iade
+      });
+      
+      // Toplam ödeme = borçlardan ödemeler + genel ödemeler
+      const totalPayment = totalPaymentFromDebts + totalGeneralPayments;
       const balance = totalDebt - totalPayment;
+      
+      console.log(`💰 Cari ${cariId} bakiye güncelleniyor:`);
+      console.log(`   Toplam Borç: ${totalDebt}`);
+      console.log(`   Borçlardan Ödemeler: ${totalPaymentFromDebts}`);
+      console.log(`   Genel Ödemeler: ${totalGeneralPayments}`);
+      console.log(`   Toplam Ödeme: ${totalPayment}`);
+      console.log(`   Net Bakiye: ${balance}`);
       
       // Cari kaydını güncelle
       const cariRef = doc(db, COLLECTIONS.reservation_cari, cariId);
@@ -273,6 +302,8 @@ export class ReservationCariService {
         balance,
         updatedAt: Timestamp.now(),
       });
+      
+      console.log(`✅ Cari ${cariId} bakiyesi güncellendi`);
     } catch (error) {
       console.error("Cari bakiye güncelleme hatası:", error);
       throw error;
@@ -305,6 +336,7 @@ export class ReservationCariService {
         odemeYontemi,
         odemeYapan,
         fisNumarasi,
+        paraBirimi: borcData.paraBirimi, // Borçtan para birimini al
         createdAt: Timestamp.now(),
         period: borcData.period,
       };
@@ -577,6 +609,7 @@ export class ReservationCariService {
   // Cariye ait ödeme detaylarını getir
   static async getOdemeDetaysByCariId(cariId: string): Promise<ReservationOdemeDetay[]> {
     try {
+      console.log(`🔍 getOdemeDetaysByCariId çağrıldı. Cari ID: ${cariId}`);
       const db = this.getFirestore();
       const q = query(
         collection(db, COLLECTIONS.reservation_cari_odemeler),
@@ -586,15 +619,22 @@ export class ReservationCariService {
       const querySnapshot = await getDocs(q);
       const odemeler: ReservationOdemeDetay[] = [];
       
+      console.log(`📊 Bulunan ödeme sayısı: ${querySnapshot.docs.length}`);
+      
       querySnapshot.forEach((doc) => {
-        odemeler.push({
+        const odeme = {
           id: doc.id,
           ...doc.data(),
-        } as ReservationOdemeDetay);
+        } as ReservationOdemeDetay;
+        
+        odemeler.push(odeme);
+        console.log(`✅ Ödeme yüklendi: ID=${odeme.id}, Tutar=${odeme.tutar}, ReservationID=${odeme.reservationId || 'Genel'}, BorcID=${odeme.borcId || 'Genel'}`);
       });
       
       // Client-side sıralama (en yeni ödemeler üstte)
-      return odemeler.sort((a, b) => new Date(b.tarih).getTime() - new Date(a.tarih).getTime());
+      const sortedOdemeler = odemeler.sort((a, b) => new Date(b.tarih).getTime() - new Date(a.tarih).getTime());
+      console.log(`📋 Toplam döndürülen ödeme: ${sortedOdemeler.length}`);
+      return sortedOdemeler;
     } catch (error) {
       console.error("Ödeme detayları getirme hatası:", error);
       throw error;
@@ -1136,6 +1176,125 @@ export class ReservationCariService {
       );
     } catch (error) {
       console.error("Ödeme ekleme hatası:", error);
+      throw error;
+    }
+  }
+
+  // Yeni genel ödeme ekleme fonksiyonu (rezervasyon bağımsız)
+  static async addGeneralOdeme(paymentData: {
+    cariId: string;
+    tutar: number;
+    paraBirimi: string;
+    tarih: string;
+    aciklama: string;
+    odemeYontemi?: string;
+    odemeYapan?: string;
+    fisNumarasi?: string;
+    reservationId?: string | null;
+    paymentId?: string | null;
+    cariBakiye?: number; // Yeni alan
+  }): Promise<void> {
+    try {
+      const db = this.getFirestore();
+      
+      // Ödeme kaydını oluştur
+      const odemeData: Omit<ReservationOdemeDetay, 'id'> = {
+        cariId: paymentData.cariId,
+        borcId: paymentData.paymentId || null, // Genel ödemeler için null
+        reservationId: paymentData.reservationId || null, // Genel ödemeler için null
+        tutar: paymentData.tutar,
+        tarih: paymentData.tarih,
+        aciklama: paymentData.aciklama,
+        odemeYontemi: paymentData.odemeYontemi,
+        odemeYapan: paymentData.odemeYapan,
+        fisNumarasi: paymentData.fisNumarasi,
+        createdAt: Timestamp.now(),
+        period: new Date().getFullYear().toString(),
+        paraBirimi: paymentData.paraBirimi,
+        cariBakiye: paymentData.cariBakiye, // Yeni alan
+      };
+      
+      await addDoc(collection(db, COLLECTIONS.reservation_cari_odemeler), odemeData);
+      
+      // Cari bakiyesini güncelle
+      await this.updateCariBalance(paymentData.cariId);
+    } catch (error) {
+      console.error("Genel ödeme ekleme hatası:", error);
+      throw error;
+    }
+  }
+
+  // Ödeme güncelleme fonksiyonu
+  static async updatePayment(paymentId: string, updateData: {
+    tutar: number;
+    paraBirimi: string;
+    tarih: string;
+    aciklama: string;
+    odemeYontemi?: string;
+    odemeYapan?: string;
+    fisNumarasi?: string;
+  }): Promise<void> {
+    try {
+      const db = this.getFirestore();
+      
+      const paymentRef = doc(db, COLLECTIONS.reservation_cari_odemeler, paymentId);
+      const paymentDoc = await getDoc(paymentRef);
+      
+      if (!paymentDoc.exists()) {
+        throw new Error("Ödeme kaydı bulunamadı");
+      }
+
+      const existingPayment = paymentDoc.data() as ReservationOdemeDetay;
+      
+      await updateDoc(paymentRef, {
+        tutar: updateData.tutar,
+        paraBirimi: updateData.paraBirimi,
+        tarih: updateData.tarih,
+        aciklama: updateData.aciklama,
+        odemeYontemi: updateData.odemeYontemi,
+        odemeYapan: updateData.odemeYapan,
+        fisNumarasi: updateData.fisNumarasi,
+        updatedAt: Timestamp.now(),
+      });
+      
+      // Cari bakiyesini güncelle
+      await this.updateCariBalance(existingPayment.cariId);
+    } catch (error) {
+      console.error("Ödeme güncelleme hatası:", error);
+      throw error;
+    }
+  }
+
+  // Ödeme silme fonksiyonu (sadece genel ödemeler + debug için tüm ödemeler)
+  static async deletePayment(paymentId: string, forceDelete = false): Promise<void> {
+    try {
+      const db = this.getFirestore();
+      
+      const paymentRef = doc(db, COLLECTIONS.reservation_cari_odemeler, paymentId);
+      const paymentDoc = await getDoc(paymentRef);
+      
+      if (!paymentDoc.exists()) {
+        throw new Error("Ödeme kaydı bulunamadı");
+      }
+
+      const paymentData = paymentDoc.data() as ReservationOdemeDetay;
+      
+      // Force delete yoksa rezervasyon bağlantılı kontrol et
+      if (!forceDelete) {
+        const isReservationLinked = (paymentData.reservationId && paymentData.reservationId.trim() !== '') ||
+                                   (paymentData.borcId && paymentData.borcId.trim() !== '');
+        
+        if (isReservationLinked) {
+          throw new Error("Rezervasyon bağlantılı ödemeler sadece rezervasyon sayfasından silinebilir");
+        }
+      }
+      
+      await deleteDoc(paymentRef);
+      
+      // Cari bakiyesini güncelle
+      await this.updateCariBalance(paymentData.cariId);
+    } catch (error) {
+      console.error("Ödeme silme hatası:", error);
       throw error;
     }
   }

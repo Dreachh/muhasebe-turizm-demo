@@ -61,7 +61,15 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
     detayliListe: any[];
   }>>({});
   const [availableCompanies, setAvailableCompanies] = useState<any[]>([]);
+  const [companies, setCompanies] = useState<any[]>([]);
   const [destinations, setDestinations] = useState<any[]>([]);
+  const [statistics, setStatistics] = useState({
+    totalCariCount: 0,
+    totalReservations: 0,
+    paidReservations: 0,
+    unpaidReservations: 0
+  });
+  const [totals, setTotals] = useState<Record<string, { totalDebt: number; totalPayment: number; balance: number }>>({});
   const [loading, setLoading] = useState(true);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -70,6 +78,9 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
   const [showOdemeDialog, setShowOdemeDialog] = useState(false);
   const [selectedBorcForPayment, setSelectedBorcForPayment] = useState<any | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  
+  // Yeni state'ler - cari kart içindeki sekme kontrolü için
+  const [activeTabByCari, setActiveTabByCari] = useState<Record<string, 'details' | 'payments'>>({});
   const router = useRouter();
 
   // Yeni cari formu
@@ -83,7 +94,7 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
     notes: "",
   });
 
-  // Ödeme formu
+  // Ödeme formu - geliştirilmiş
   const [odemeForm, setOdemeForm] = useState({
     tutar: "",
     tarih: new Date().toISOString().split('T')[0],
@@ -91,7 +102,34 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
     odemeYontemi: "",
     odemeYapan: "",
     fisNumarasi: "",
+    paraBirimi: "EUR", // Yeni alan - para birimi
+    odemeType: "payment", // payment (ödeme) veya refund (iade/geri ödeme)
   });
+
+  // Seçilen para birimindeki cari bakiyeyi hesapla
+  const getCurrentBalanceForCurrency = (cariId: string, currency: string): number => {
+    const details = cariDetails[cariId];
+    if (!details) return 0;
+
+    let balance = 0;
+    
+    // Borçları topla (sadece seçilen para birimi)
+    details.borclar.forEach((borc: any) => {
+      if ((borc.paraBirimi || 'EUR') === currency) {
+        balance += (borc.tutar || 0) - (borc.odeme || 0);
+      }
+    });
+    
+    // Genel ödemeleri çıkar (sadece seçilen para birimi)
+    details.odemeler.forEach((odeme: any) => {
+      const isGeneralPayment = !odeme.reservationId || odeme.reservationId.trim() === '';
+      if (isGeneralPayment && (odeme.paraBirimi || 'EUR') === currency) {
+        balance -= odeme.tutar || 0;
+      }
+    });
+    
+    return balance;
+  };
 
   useEffect(() => {
     loadCariList();
@@ -103,130 +141,47 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
     filterCariList();
   }, [cariList, searchTerm, filterType]);
 
-  // Otomatik güncelleme sistemi - sadece açık cari detayları için - KALDIRILDI
-  // Artık sadece manuel yenileme ve yeni kayıt eklendiğinde güncelleme yapılacak
-
-  // Ana cari listesini otomatik güncelle - SADECE BAŞLANGIÇTA
-  useEffect(() => {
-    // Sadece sayfa ilk yüklendiğinde çalışır, sonrasında manuel güncelleme
-    const initialLoad = setTimeout(() => {
-      loadCariList();
-    }, 1000);
-
-    return () => clearTimeout(initialLoad);
-  }, [period]); // Sadece period değiştiğinde çalışır
-
-  // Toplam değerleri hesapla - TÜM cari detaylarından para birimi bazında (SABİT DEĞERLER)
-  const totals = useMemo(() => {
-    const currencyTotals: Record<string, { totalDebt: number; totalPayment: number; totalBalance: number }> = {};
-    
-    // Tüm cari detaylarından borç kayıtlarını para birimi bazında topla
-    Object.values(cariDetails).forEach(detail => {
-      if (detail.borclar && detail.borclar.length > 0) {
-        detail.borclar.forEach((borc: any) => {
-          const currency = borc.paraBirimi || 'EUR';
-          if (!currencyTotals[currency]) {
-            currencyTotals[currency] = { totalDebt: 0, totalPayment: 0, totalBalance: 0 };
-          }
-          currencyTotals[currency].totalDebt += borc.tutar || 0;
-          currencyTotals[currency].totalPayment += borc.odeme || 0;
-        });
-      }
-    });
-    
-    // Bakiyeleri hesapla
-    Object.values(currencyTotals).forEach(values => {
-      values.totalBalance = values.totalDebt - values.totalPayment;
-    });
-    
-    // Eğer hiç detay yoksa varsayılan olarak boş obje döndür
-    return currencyTotals;
-  }, [cariDetails]);
-
-  // İstatistik değerleri - backend'den al
-  const [statistics, setStatistics] = useState({
-    totalCariCount: 0,
-    totalReservations: 0,
-    paidReservations: 0,
-    unpaidReservations: 0,
-    debtorCount: 0,
-    creditorCount: 0,
-  });
-
-  const loadAvailableCompanies = async () => {
-    try {
-      const companies = await getCompanies();
-      setAvailableCompanies(companies);
-    } catch (error) {
-      console.error("Firmalar yüklenirken hata:", error);
-      toast({
-        title: "Uyarı",
-        description: "Firmalar yüklenirken bir hata oluştu",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const loadDestinations = async () => {
-    try {
-      const destinationList = await getReservationDestinations();
-      setDestinations(destinationList);
-    } catch (error) {
-      console.error("Destinasyonlar yüklenirken hata:", error);
-    }
-  };
-
-  const handleCompanySelect = (companyName: string) => {
-    const selectedCompany = availableCompanies.find(
-      company => (company.name || company.companyName) === companyName
-    );
-    
-    if (selectedCompany) {
-      setNewCariForm({
-        ...newCariForm,
-        companyName,
-        contactPerson: selectedCompany.contactPerson || newCariForm.contactPerson,
-        contactPhone: selectedCompany.phone || selectedCompany.contactPhone || newCariForm.contactPhone,
-        contactEmail: selectedCompany.email || selectedCompany.contactEmail || newCariForm.contactEmail,
-        address: selectedCompany.address || newCariForm.address,
-        taxNumber: selectedCompany.taxNumber || newCariForm.taxNumber,
-      });
-    } else {
-      setNewCariForm({...newCariForm, companyName});
-    }
-  };
-
-  const loadStatistics = async () => {
-    try {
-      const stats = await ReservationCariService.getGeneralStatistics(period);
-      setStatistics(stats);
-    } catch (error) {
-      console.error("İstatistik yükleme hatası:", error);
-    }
-  };
-
+  // Ana cari listesini yüklerken tüm detayları da yükle
   const loadCariList = async () => {
     try {
       setLoading(true);
       const data = await ReservationCariService.getAllCari(period);
       setCariList(data);
       
-      // Tüm cari detaylarını toplu yükle (toplam hesaplamaları için)
+      // Tüm cari detaylarını toplu yükle - HEM borç/ödeme HEM DE detaylı liste
       setDetailsLoading(true);
       try {
+        console.log('📊 Tüm cari detayları yükleniyor...');
         const allDetails = await Promise.all(
           data.map(async (cari) => {
             try {
-              const [borclar, odemeler] = await Promise.all([
+              console.log(`🔄 ${cari.companyName} için detaylar yükleniyor...`);
+              const [borclar, odemeler, detayliListe] = await Promise.all([
                 ReservationCariService.getBorcDetaysByCariId(cari.id!),
-                ReservationCariService.getOdemeDetaysByCariId(cari.id!)
+                ReservationCariService.getOdemeDetaysByCariId(cari.id!),
+                ReservationCariService.getBorcDetaylarWithReservationInfo(cari.id!) // Detaylı liste de baştan yükle
               ]);
+              
+              console.log(`✅ ${cari.companyName} detayları: Borçlar=${borclar.length}, Ödemeler=${odemeler.length}, Detaylı Liste=${detayliListe.length}`);
+              
+              // Ödeme detaylarını inceleme
+              if (odemeler.length > 0) {
+                console.log(`🧾 ${cari.companyName} için ödemeler:`);
+                odemeler.forEach((odeme: any, index: number) => {
+                  const isReservationLinked = (odeme.reservationId && odeme.reservationId.trim() !== '') || 
+                                            (odeme.borcId && odeme.borcId.trim() !== '');
+                  console.log(`   Ödeme #${index+1}: ID=${odeme.id}, Tutar=${odeme.tutar}, Tarih=${odeme.tarih}, ReservationID=${odeme.reservationId || 'Genel'}, BorcID=${odeme.borcId || 'Genel'}, Rezervasyon Bağlantılı: ${isReservationLinked ? 'EVET' : 'HAYIR'}`);
+                });
+              } else {
+                console.warn(`⚠️ ${cari.companyName} için ödeme bulunamadı!`);
+              }
+              
               return {
                 cariId: cari.id!,
-                details: { borclar, odemeler, detayliListe: [] }
+                details: { borclar, odemeler, detayliListe }
               };
             } catch (error) {
-              console.error(`Cari detayları yüklenirken hata (${cari.companyName}):`, error);
+              console.error(`❌ Cari detayları yüklenirken hata (${cari.companyName}):`, error);
               return {
                 cariId: cari.id!,
                 details: { borclar: [], odemeler: [], detayliListe: [] }
@@ -242,6 +197,7 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
         });
         
         setCariDetails(newCariDetails);
+        console.log('📋 Tüm cari detayları yüklendi ve state\'e yazıldı');
       } catch (error) {
         console.error("Cari detayları toplu yükleme hatası:", error);
       } finally {
@@ -327,6 +283,77 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
     setFilteredCariList(filtered);
   };
 
+  // Mevcut firmaları yükle
+  const loadAvailableCompanies = async () => {
+    try {
+      const companiesData = await getCompanies();
+      setCompanies(companiesData || []);
+      setAvailableCompanies(companiesData || []);
+    } catch (error) {
+      console.error("Firma listesi yüklenirken hata:", error);
+      setCompanies([]);
+      setAvailableCompanies([]);
+    }
+  };
+
+  // Destinasyonları yükle
+  const loadDestinations = async () => {
+    try {
+      const destinationsData = await getReservationDestinations();
+      setDestinations(destinationsData || []);
+    } catch (error) {
+      console.error("Destinasyon listesi yüklenirken hata:", error);
+      setDestinations([]);
+    }
+  };
+
+  // İstatistikleri yükle - loadCariList içinde çağrılacak
+  const loadStatistics = async () => {
+    try {
+      // İstatistikleri cari listesinden hesapla
+      const totalCariCount = cariList.length;
+      let totalReservations = 0;
+      let paidReservations = 0;
+      
+      Object.values(cariDetails).forEach(details => {
+        totalReservations += details.detayliListe.length;
+        paidReservations += details.detayliListe.filter(item => item.odemeDurumu === 'Ödendi').length;
+      });
+      
+      const unpaidReservations = totalReservations - paidReservations;
+
+      setStatistics({
+        totalCariCount,
+        totalReservations,
+        paidReservations,
+        unpaidReservations
+      });
+
+      // Para birimi totalleri hesapla
+      const newTotals: Record<string, { totalDebt: number; totalPayment: number; balance: number }> = {};
+      
+      cariList.forEach(cari => {
+        const details = cariDetails[cari.id!];
+        if (details) {
+          details.borclar.forEach((borc: any) => {
+            const currency = borc.paraBirimi || 'EUR';
+            if (!newTotals[currency]) {
+              newTotals[currency] = { totalDebt: 0, totalPayment: 0, balance: 0 };
+            }
+            newTotals[currency].totalDebt += borc.tutar || 0;
+            newTotals[currency].totalPayment += borc.odeme || 0;
+            newTotals[currency].balance += (borc.tutar || 0) - (borc.odeme || 0);
+          });
+        }
+      });
+
+      setTotals(newTotals);
+      console.log("İstatistikler güncellendi");
+    } catch (error) {
+      console.error("İstatistik yükleme hatası:", error);
+    }
+  };
+
   const toggleCariExpansion = async (cari: ReservationCari) => {
     const cariId = cari.id!;
     const newExpandedIds = new Set(expandedCariIds);
@@ -338,26 +365,49 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
       // Cari açılıyor
       newExpandedIds.add(cariId);
       
-      // Sadece detaylı liste yüklenmemişse yükle (borç ve ödeme zaten var)
-      if (cariDetails[cariId] && !cariDetails[cariId].detayliListe.length) {
-        try {
-          const detayliListe = await ReservationCariService.getBorcDetaylarWithReservationInfo(cariId);
-          
-          setCariDetails(prev => ({
-            ...prev,
-            [cariId]: { 
-              ...prev[cariId], 
-              detayliListe 
-            }
-          }));
-        } catch (error) {
-          console.error("Detaylı liste yüklenirken hata:", error);
-          toast({
-            title: "Hata",
-            description: "Rezervasyon detayları yüklenirken bir hata oluştu",
-            variant: "destructive",
+      // Varsayılan tab'ı details olarak ayarla
+      if (!activeTabByCari[cariId]) {
+        setActiveTabByCari(prev => ({ ...prev, [cariId]: 'details' }));
+      }
+      
+      // Her cari açıldığında verileri yenile (otomatik güncelleme yok artık)
+      try {
+        console.log(`🔄 ${cari.companyName} için detaylar yeniden yükleniyor...`);
+        setDetailsLoading(true);
+        
+        const [borclar, odemeler, detayliListe] = await Promise.all([
+          ReservationCariService.getBorcDetaysByCariId(cariId),
+          ReservationCariService.getOdemeDetaysByCariId(cariId),
+          ReservationCariService.getBorcDetaylarWithReservationInfo(cariId)
+        ]);
+        
+        // Ödeme detaylarını inceleme (log)
+        if (odemeler.length > 0) {
+          console.log(`📋 ${cari.companyName} için ${odemeler.length} ödeme bulundu:`);
+          odemeler.forEach((odeme: any, index: number) => {
+            const isReservationLinked = (odeme.reservationId && odeme.reservationId.trim() !== '') || 
+                                     (odeme.borcId && odeme.borcId.trim() !== '');
+            console.log(`   Ödeme #${index+1}: ID=${odeme.id}, Tutar=${odeme.tutar}, Tarih=${odeme.tarih}, ReservationID=${odeme.reservationId || 'Genel'}, BorcID=${odeme.borcId || 'Genel'}, Rezervasyon Bağlantılı: ${isReservationLinked ? 'EVET' : 'HAYIR'}`);
           });
+        } else {
+          console.warn(`⚠️ ${cari.companyName} için ödeme bulunamadı!`);
         }
+        
+        setCariDetails(prev => ({
+          ...prev,
+          [cariId]: { borclar, odemeler, detayliListe }
+        }));
+        
+        console.log(`✅ ${cari.companyName} detayları güncellendi:`, { borclar: borclar.length, odemeler: odemeler.length, detayliListe: detayliListe.length });
+      } catch (error) {
+        console.error("Detay yükleme hatası:", error);
+        toast({
+          title: "Hata",
+          description: "Cari detayları yüklenirken bir hata oluştu",
+          variant: "destructive",
+        });
+      } finally {
+        setDetailsLoading(false);
       }
     }
     
@@ -411,15 +461,23 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
     }
   };
 
-  const handleOdemeEkle = (borc: any) => {
+  const handleOdemeEkle = (borc: any, type: 'payment' | 'refund' = 'payment') => {
     setSelectedBorcForPayment(borc);
+    
+    // Ödeme yapan otomatik doldur
+    const odemeYapan = type === 'payment' 
+      ? borc.firma || "Müşteri" // Ödeme al → Cari firma
+      : "Nehir Turizm"; // Geri öde → Bizim firma
+    
     setOdemeForm({
-      tutar: borc.kalan.toString(),
+      tutar: "",
       tarih: new Date().toISOString().split('T')[0],
-      aciklama: `${borc.destinasyon} - ${borc.musteri} rezervasyonu için ödeme`,
+      aciklama: "",
       odemeYontemi: "",
-      odemeYapan: "",
+      odemeYapan, // Otomatik doldur
       fisNumarasi: "",
+      paraBirimi: borc.paraBirimi || "EUR",
+      odemeType: type,
     });
     setShowOdemeDialog(true);
   };
@@ -429,36 +487,86 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
       if (!selectedBorcForPayment || !odemeForm.tutar || !odemeForm.aciklama) {
         toast({
           title: "Hata",
-          description: "Gerekli alanları doldurun",
+          description: "Lütfen tüm zorunlu alanları doldurun",
           variant: "destructive",
         });
         return;
       }
 
       const tutar = parseFloat(odemeForm.tutar);
-      if (tutar <= 0 || tutar > selectedBorcForPayment.kalan) {
+      if (isNaN(tutar) || tutar <= 0) {
         toast({
           title: "Hata",
-          description: "Geçersiz ödeme tutarı",
+          description: "Geçerli bir tutar girin",
           variant: "destructive",
         });
         return;
       }
 
-      await ReservationCariService.addOdeme(
-        selectedBorcForPayment.id,
-        tutar,
-        odemeForm.tarih,
-        odemeForm.aciklama,
-        odemeForm.odemeYontemi,
-        odemeForm.odemeYapan,
-        odemeForm.fisNumarasi
-      );
+      // İade ise tutarı negatif yap
+      const finalAmount = odemeForm.odemeType === 'refund' ? -tutar : tutar;
 
-      toast({
-        title: "Başarılı",
-        description: "Ödeme eklendi",
-      });
+      // Cari kartın o anki genel bakiyesini (seçilen para birimi için) bul
+      let currentCariBalance = 0;
+      if (selectedBorcForPayment && selectedBorcForPayment.cariId) {
+        // Yeni yöntem: getCurrentBalanceForCurrency fonksiyonunu kullan
+        currentCariBalance = getCurrentBalanceForCurrency(
+          selectedBorcForPayment.cariId, 
+          odemeForm.paraBirimi || 'EUR'
+        );
+      }
+
+      if (selectedBorcForPayment.editingPaymentId) {
+        // Edit modu - mevcut ödemeyi güncelle
+        const updateData = {
+          tutar: finalAmount,
+          paraBirimi: odemeForm.paraBirimi,
+          tarih: new Date(odemeForm.tarih).toISOString(),
+          aciklama: odemeForm.aciklama,
+          odemeYontemi: odemeForm.odemeYontemi,
+          odemeYapan: odemeForm.odemeYapan,
+          fisNumarasi: odemeForm.fisNumarasi,
+          cariBakiye: currentCariBalance // yeni alan: ödeme anındaki bakiye
+        };
+
+        await ReservationCariService.updatePayment(selectedBorcForPayment.editingPaymentId, updateData);
+        
+        toast({
+          title: "Başarılı",
+          description: "Ödeme başarıyla güncellendi"
+        });
+      } else {
+        // Yeni ödeme ekleme - sadece genel ödemeler için 
+        const odemeData = {
+          cariId: selectedBorcForPayment.cariId,
+          tutar: finalAmount,
+          paraBirimi: odemeForm.paraBirimi,
+          tarih: new Date(odemeForm.tarih).toISOString(),
+          aciklama: `${odemeForm.odemeType === 'refund' ? 'İade: ' : 'Genel Ödeme: '}${odemeForm.aciklama}`,
+          odemeYontemi: odemeForm.odemeYontemi,
+          odemeYapan: odemeForm.odemeYapan,
+          fisNumarasi: odemeForm.fisNumarasi,
+          reservationId: null,
+          paymentId: null,
+          cariBakiye: currentCariBalance // yeni alan: ödeme anındaki bakiye
+        };
+
+        // Eğer bu bir rezervasyona bağlı ödeme ise
+        if (selectedBorcForPayment.id && selectedBorcForPayment.reservationId) {
+          odemeData.reservationId = selectedBorcForPayment.reservationId;
+          odemeData.paymentId = selectedBorcForPayment.id;
+          odemeData.aciklama = `${odemeForm.odemeType === 'refund' ? 'İade: ' : 'Rezervasyon Ödemesi: '}${odemeForm.aciklama}`;
+        }
+
+        await ReservationCariService.addGeneralOdeme(odemeData);
+        
+        toast({
+          title: "Başarılı",
+          description: odemeForm.odemeType === 'refund' 
+            ? "İade başarıyla kaydedildi" 
+            : "Ödeme başarıyla eklendi",
+        });
+      }
 
       setShowOdemeDialog(false);
       setSelectedBorcForPayment(null);
@@ -469,18 +577,21 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
         odemeYontemi: "",
         odemeYapan: "",
         fisNumarasi: "",
+        paraBirimi: "EUR",
+        odemeType: "payment",
       });
 
-      // SADECE ödeme eklenen carinin detaylarını güncelle - liste ve diğer cariler dokunulmasın
-      const cariId = selectedBorcForPayment.cariId;
+      // SADECE ödeme eklenen/güncellenen carinin detaylarını güncelle
+      const cariId = selectedBorcForPayment.cariId || selectedBorcForPayment.id;
       try {
+        console.log(`🔄 Ödeme işlemi sonrası ${cariId} için veriler yeniden yükleniyor...`);
+        
         const [borclar, odemeler, detayliListe] = await Promise.all([
           ReservationCariService.getBorcDetaysByCariId(cariId),
           ReservationCariService.getOdemeDetaysByCariId(cariId),
           ReservationCariService.getBorcDetaylarWithReservationInfo(cariId)
         ]);
         
-        // Sadece bu carinin detaylarını güncelle
         setCariDetails(prev => ({
           ...prev,
           [cariId]: { borclar, odemeler, detayliListe }
@@ -491,14 +602,19 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
         if (updatedCari) {
           setCariList(prev => prev.map(c => c.id === cariId ? updatedCari : c));
         }
+        
+        // İstatistikleri de güncelle
+        await loadStatistics();
+        
+        console.log(`✅ ${cariId} için veriler güncellendi. Ödemeler: ${odemeler.length}`);
       } catch (error) {
         console.error("Detay güncelleme hatası:", error);
       }
     } catch (error) {
-      console.error("Ödeme eklenirken hata:", error);
+      console.error("Ödeme işlem hatası:", error);
       toast({
         title: "Hata",
-        description: "Ödeme eklenirken bir hata oluştu",
+        description: "Ödeme işlemi sırasında bir hata oluştu",
         variant: "destructive",
       });
     }
@@ -508,13 +624,21 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
     router.push(`/print/reservation-cari/${cari.id}`);
   };
 
-  const formatCurrency = (amount: number, currency = "EUR") => {
-    // Map common currency codes if needed (e.g., TL to ISO TRY)
-    const isoCode = currency === 'TL' ? 'TRY' : currency;
+  // Para birimi formatı
+  const formatCurrency = (amount: number, currency: string = 'EUR') => {
     return new Intl.NumberFormat('tr-TR', {
       style: 'currency',
-      currency: isoCode
+      currency: currency,
+      minimumFractionDigits: 2
     }).format(amount);
+  };
+
+  // Firma seçimi için handler
+  const handleCompanySelect = (companyName: string) => {
+    setNewCariForm(prev => ({
+      ...prev,
+      companyName
+    }));
   };
 
   const formatDate = (dateString: string) => {
@@ -838,7 +962,7 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
                     ) : (
                       <div className="space-y-1">
                         {Object.entries(totals).map(([currency, values]) => {
-                          const balance = values.totalBalance;
+                          const balance = values.balance;
                           const isPositive = balance >= 0;
                           return (
                             <div key={currency} className="flex items-center gap-2">
@@ -934,8 +1058,10 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
                         {/* Para birimi bazında toplamları göster */}
                         {details && details.borclar.length > 0 ? (
                           (() => {
-                            // Bu cariye ait para birimi toplamlarını hesapla
+                            // Bu cariye ait para birimi toplamlarını hesapla (hem rezervasyon borçları hem genel ödemeler dahil)
                             const cariCurrencyTotals: { [key: string]: { debt: number; payment: number; balance: number } } = {};
+                            
+                            // 1. Rezervasyon borçları ve ödemelerini ekle
                             details.borclar.forEach((borc: any) => {
                               const currency = borc.paraBirimi || 'EUR';
                               if (!cariCurrencyTotals[currency]) {
@@ -944,6 +1070,22 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
                               cariCurrencyTotals[currency].debt += borc.tutar || 0;
                               cariCurrencyTotals[currency].payment += borc.odeme || 0;
                               cariCurrencyTotals[currency].balance += (borc.tutar || 0) - (borc.odeme || 0);
+                            });
+                            
+                            // 2. Genel ödemeleri de dahil et (reservationId olmayan ödemeler)
+                            details.odemeler.forEach((odeme: any) => {
+                              // Sadece genel ödemeleri dahil et (rezervasyon bağlantılı olmayanlar)
+                              const isGeneralPayment = !odeme.reservationId || odeme.reservationId.trim() === '';
+                              
+                              if (isGeneralPayment) {
+                                const currency = odeme.paraBirimi || 'EUR';
+                                if (!cariCurrencyTotals[currency]) {
+                                  cariCurrencyTotals[currency] = { debt: 0, payment: 0, balance: 0 };
+                                }
+                                // Genel ödemeler bakiyeyi etkiler
+                                // Pozitif tutar = tahsilat (borcu azaltır), Negatif tutar = iade (borcu artırır)
+                                cariCurrencyTotals[currency].balance -= odeme.tutar || 0;
+                              }
                             });
                             
                             return (
@@ -1003,186 +1145,546 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
                 <CollapsibleContent>
                   <CardContent className="pt-0">
                     {details ? (
-                      <div className="space-y-6">
-                        {/* Rezervasyon Listesi Formatında Detaylı Tablo */}
-                        <div>
-                          <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
-                            <FileText className="w-5 h-5" />
-                            Rezervasyon Detayları ({details.detayliListe.length})
-                            {upcomingReservations.length > 0 && (
-                              <Badge variant="destructive" className="animate-pulse">
-                                {upcomingReservations.length} Yaklaşan
-                              </Badge>
-                            )}
-                          </h3>
-                          <div className="rounded-md border overflow-x-auto">
-                            <Table className="table-auto w-full text-xs">
-                              <colgroup>
-                                <col style={{width: '70px'}}/>
-                                <col style={{width: '70px'}}/>
-                                <col style={{width: '60px'}}/>
-                                <col style={{width: '65px'}}/>
-                                <col style={{width: '65px'}}/>
-                                <col style={{width: '65px'}}/>
-                                <col style={{width: '80px'}}/>
-                                <col style={{width: '90px'}}/>
-                                <col style={{width: '50px'}}/>
-                                <col style={{width: '70px'}}/>
-                                <col style={{width: '60px'}}/>
-                                <col style={{width: '40px'}}/>
-                              </colgroup>
-                              <TableHeader>
-                                <TableRow className="bg-gray-50">
-                                  <TableHead className="text-center text-[10px] font-bold py-1 px-1">TUR TARİH</TableHead>
-                                  <TableHead className="text-center text-[10px] font-bold py-1 px-1">ÖDEME TARİH</TableHead>
-                                  <TableHead className="text-center text-[10px] font-bold py-1 px-1">FİRMA</TableHead>
-                                  <TableHead className="text-center text-[10px] font-bold py-1 px-1">TUTAR</TableHead>
-                                  <TableHead className="text-center text-[10px] font-bold py-1 px-1">ÖDEME / YAPAN</TableHead>
-                                  <TableHead className="text-center text-[10px] font-bold py-1 px-1">KALAN</TableHead>
-                                  <TableHead className="text-center text-[10px] font-bold py-1 px-1">DESTİNASYON</TableHead>
-                                  <TableHead className="text-center text-[10px] font-bold py-1 px-1">MÜŞTERİ</TableHead>
-                                  <TableHead className="text-center text-[10px] font-bold py-1 px-1">KİŞİ</TableHead>
-                                  <TableHead className="text-center text-[10px] font-bold py-1 px-1">ALIŞ YERİ</TableHead>
-                                  <TableHead className="text-center text-[10px] font-bold py-1 px-1">ALIŞ</TableHead>
-                                  <TableHead className="text-center text-[10px] font-bold py-1 px-1">İşlem</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {details.detayliListe.map((item: any) => {
-                                  const today = new Date();
-                                  today.setHours(0, 0, 0, 0);
-                                  
-                                  const tomorrow = new Date(today);
-                                  tomorrow.setDate(today.getDate() + 1);
-                                  
-                                  const dayAfterTomorrow = new Date(today);
-                                  dayAfterTomorrow.setDate(today.getDate() + 2);
-                                  
-                                  const threeDaysLater = new Date(today);
-                                  threeDaysLater.setDate(today.getDate() + 3);
-                                  
-                                  const reservationDate = new Date(item.turTarih);
-                                  reservationDate.setHours(0, 0, 0, 0);
-                                  
-                                  // Yakınlık derecesine göre renklendirme
-                                  let rowBgClass = "";
-                                  
-                                  if (item.kalan > 0) { // Sadece kalan borcu olanları renklendir
-                                    if (reservationDate >= today && reservationDate < tomorrow) {
-                                      rowBgClass = "bg-red-100 border-l-4 border-red-700";
-                                    } else if (reservationDate >= tomorrow && reservationDate < dayAfterTomorrow) {
-                                      rowBgClass = "bg-red-75 border-l-4 border-red-500";
-                                    } else if (reservationDate >= dayAfterTomorrow && reservationDate < threeDaysLater) {
-                                      rowBgClass = "bg-red-50 border-l-4 border-red-300";
-                                    }
-                                  }
-                                  
-                                  return (
-                                    <TableRow key={item.id} className={`${rowBgClass} text-[10px]`}>
-                                      <TableCell className="text-center font-bold truncate py-1 px-1">
-                                        {formatDate(item.turTarih)}
-                                      </TableCell>
-                                      <TableCell className="text-center truncate py-1 px-1">
-                                        {item.odemeTarih || item.odemeTarihi ? (
-                                          <span className="text-green-600 font-medium text-[9px]">
-                                            {formatDate(item.odemeTarih || item.odemeTarihi)}
-                                          </span>
-                                        ) : "-"}
-                                      </TableCell>
-                                      <TableCell className="text-center font-medium truncate py-1 px-1">
-                                        {item.firma || "-"}
-                                      </TableCell>
-                                      <TableCell className="text-center font-bold truncate py-1 px-1">
-                                        {formatCurrency(item.tutar, item.paraBirimi)}
-                                      </TableCell>
-                                      <TableCell className="text-center text-green-600 font-bold truncate py-1 px-1">
-                                        <div>
-                                          {formatCurrency(item.odeme, item.paraBirimi)}
-                                          {/* Ödemeyi kimin yaptığını göster */}
-                                          {item.odemeYapan && (
-                                            <div className="text-[9px] text-gray-600 font-normal">
-                                              {item.odemeYapan}
-                                            </div>
-                                          )}
-                                        </div>
-                                      </TableCell>
-                                      <TableCell className={`text-center font-bold truncate py-1 px-1 ${item.kalan > 0 ? "text-red-600" : "text-green-600"}`}>
-                                        {formatCurrency(item.kalan, item.paraBirimi)}
-                                      </TableCell>
-                                      <TableCell className="text-center text-blue-600 font-medium truncate py-1 px-1">
-                                        {item.destinasyon}
-                                      </TableCell>
-                                      <TableCell className="text-center truncate py-1 px-1">
-                                        {item.musteri}
-                                      </TableCell>
-                                      <TableCell className="text-center font-medium py-1 px-1">
-                                        {item.kisi}
-                                      </TableCell>
-                                      <TableCell className="text-center truncate py-1 px-1">
-                                        {item.alisYeriDetay || item.alisYeri || "-"}
-                                      </TableCell>
-                                      <TableCell className="text-center py-1 px-1">
-                                        {item.alisDetay || item.alis || "-"}
-                                      </TableCell>
-                                      <TableCell className="text-center py-1 px-1">
-                                        {item.kalan > 0 && (
-                                          <div
-                                            className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground px-1 py-0.5 h-5 cursor-pointer"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              handleOdemeEkle(item);
-                                            }}
-                                          >
-                                            <CreditCard className="w-2 h-2" />
-                                          </div>
-                                        )}
-                                        {item.kalan <= 0 && (
-                                          <Badge className="bg-green-100 text-green-800 text-[8px] px-1 py-0">
-                                            ✓
-                                          </Badge>
-                                        )}
-                                      </TableCell>
-                                    </TableRow>
-                                  );
-                                })}
-                              </TableBody>
-                            </Table>
-                          </div>
+                      <div className="space-y-4">
+                        {/* Tab Butonları */}
+                        <div className="flex gap-2 border-b">
+                          <button
+                            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                              (activeTabByCari[cari.id!] || 'details') === 'details'
+                                ? 'border-blue-500 text-blue-600 bg-blue-50'
+                                : 'border-transparent text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+                            }`}
+                            onClick={() => setActiveTabByCari(prev => ({ ...prev, [cari.id!]: 'details' }))}
+                          >
+                            <div className="flex items-center gap-2">
+                              <FileText className="w-4 h-4" />
+                              Rezervasyon Detayları ({details.detayliListe.length})
+                            </div>
+                          </button>
+                          <button
+                            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                              activeTabByCari[cari.id!] === 'payments'
+                                ? 'border-green-500 text-green-600 bg-green-50'
+                                : 'border-transparent text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+                            }`}
+                            onClick={() => setActiveTabByCari(prev => ({ ...prev, [cari.id!]: 'payments' }))}
+                          >
+                            <div className="flex items-center gap-2">
+                              <CreditCard className="w-4 h-4" />
+                              Son Ödemeler ({details.odemeler.length})
+                            </div>
+                          </button>
                         </div>
 
-                        {/* Ödemeler Özet Tablosu */}
-                        {details.odemeler.length > 0 && (
+                        {/* Tab İçerikleri */}
+                        {(activeTabByCari[cari.id!] || 'details') === 'details' ? (
+                          // Rezervasyon Detayları Tab
                           <div>
-                            <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
-                              <CreditCard className="w-5 h-5" />
-                              Son Ödemeler ({details.odemeler.length})
-                            </h3>
+                            <div className="flex items-center justify-between mb-3">
+                              <h3 className="text-lg font-semibold flex items-center gap-2">
+                                <FileText className="w-5 h-5" />
+                                Rezervasyon Detayları
+                                {upcomingReservations.length > 0 && (
+                                  <Badge variant="destructive" className="animate-pulse">
+                                    {upcomingReservations.length} Yaklaşan
+                                  </Badge>
+                                )}
+                              </h3>
+                            </div>
                             <div className="rounded-md border overflow-x-auto">
-                              <Table>
+                              <Table className="table-auto w-full text-xs">
+                                <colgroup>
+                                  <col style={{width: '70px'}}/>
+                                  <col style={{width: '70px'}}/>
+                                  <col style={{width: '60px'}}/>
+                                  <col style={{width: '65px'}}/>
+                                  <col style={{width: '65px'}}/>
+                                  <col style={{width: '65px'}}/>
+                                  <col style={{width: '80px'}}/>
+                                  <col style={{width: '90px'}}/>
+                                  <col style={{width: '50px'}}/>
+                                  <col style={{width: '70px'}}/>
+                                  <col style={{width: '60px'}}/>
+                                  <col style={{width: '40px'}}/>
+                                </colgroup>
                                 <TableHeader>
                                   <TableRow className="bg-gray-50">
-                                    <TableHead className="text-xs">Tarih</TableHead>
-                                    <TableHead className="text-xs text-right">Tutar</TableHead>
-                                    <TableHead className="text-xs">Açıklama</TableHead>
-                                    <TableHead className="text-xs">Ödeme Yöntemi</TableHead>
-                                    <TableHead className="text-xs">Fiş No</TableHead>
+                                    <TableHead className="text-center text-[10px] font-bold py-1 px-1">TUR TARİH</TableHead>
+                                    <TableHead className="text-center text-[10px] font-bold py-1 px-1">ÖDEME TARİH</TableHead>
+                                    <TableHead className="text-center text-[10px] font-bold py-1 px-1">FİRMA</TableHead>
+                                    <TableHead className="text-center text-[10px] font-bold py-1 px-1">TUTAR</TableHead>
+                                    <TableHead className="text-center text-[10px] font-bold py-1 px-1">ÖDEME / YAPAN</TableHead>
+                                    <TableHead className="text-center text-[10px] font-bold py-1 px-1">KALAN</TableHead>
+                                    <TableHead className="text-center text-[10px] font-bold py-1 px-1">DESTİNASYON</TableHead>
+                                    <TableHead className="text-center text-[10px] font-bold py-1 px-1">MÜŞTERİ</TableHead>
+                                    <TableHead className="text-center text-[10px] font-bold py-1 px-1">KİŞİ</TableHead>
+                                    <TableHead className="text-center text-[10px] font-bold py-1 px-1">ALIŞ YERİ</TableHead>
+                                    <TableHead className="text-center text-[10px] font-bold py-1 px-1">ALIŞ</TableHead>
+                                    <TableHead className="text-center text-[10px] font-bold py-1 px-1">İşlem</TableHead>
                                   </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                  {details.odemeler.slice(0, 5).map((odeme) => (
-                                    <TableRow key={odeme.id} className="text-xs">
-                                      <TableCell>{formatDate(odeme.tarih)}</TableCell>
-                                      <TableCell className="text-right text-green-600 font-medium">
-                                        {formatCurrency(odeme.tutar)}
-                                      </TableCell>
-                                      <TableCell className="truncate max-w-[200px]">{odeme.aciklama}</TableCell>
-                                      <TableCell>{odeme.odemeYontemi || "-"}</TableCell>
-                                      <TableCell>{odeme.fisNumarasi || "-"}</TableCell>
-                                    </TableRow>
-                                  ))}
+                                  {details.detayliListe.map((item: any) => {
+                                    const today = new Date();
+                                    today.setHours(0, 0, 0, 0);
+                                    
+                                    const tomorrow = new Date(today);
+                                    tomorrow.setDate(today.getDate() + 1);
+                                    
+                                    const dayAfterTomorrow = new Date(today);
+                                    dayAfterTomorrow.setDate(today.getDate() + 2);
+                                    
+                                    const threeDaysLater = new Date(today);
+                                    threeDaysLater.setDate(today.getDate() + 3);
+                                    
+                                    const reservationDate = new Date(item.turTarih);
+                                    reservationDate.setHours(0, 0, 0, 0);
+                                    
+                                    // Yakınlık derecesine göre renklendirme
+                                    let rowBgClass = "";
+                                    
+                                    if (item.kalan > 0) { // Sadece kalan borcu olanları renklendir
+                                      if (reservationDate >= today && reservationDate < tomorrow) {
+                                        rowBgClass = "bg-red-100 border-l-4 border-red-700";
+                                      } else if (reservationDate >= tomorrow && reservationDate < dayAfterTomorrow) {
+                                        rowBgClass = "bg-red-75 border-l-4 border-red-500";
+                                      } else if (reservationDate >= dayAfterTomorrow && reservationDate < threeDaysLater) {
+                                        rowBgClass = "bg-red-50 border-l-4 border-red-300";
+                                      }
+                                    }
+                                    
+                                    return (
+                                      <TableRow key={item.id} className={`${rowBgClass} text-[10px]`}>
+                                        <TableCell className="text-center font-bold truncate py-1 px-1">
+                                          {formatDate(item.turTarih)}
+                                        </TableCell>
+                                        <TableCell className="text-center truncate py-1 px-1">
+                                          {item.odemeTarih || item.odemeTarihi ? (
+                                            <span className="text-green-600 font-medium text-[9px]">
+                                              {formatDate(item.odemeTarih || item.odemeTarihi)}
+                                            </span>
+                                          ) : "-"}
+                                        </TableCell>
+                                        <TableCell className="text-center font-medium truncate py-1 px-1">
+                                          {item.firma || "-"}
+                                        </TableCell>
+                                        <TableCell className="text-center font-bold truncate py-1 px-1">
+                                          {formatCurrency(item.tutar, item.paraBirimi)}
+                                        </TableCell>
+                                        <TableCell className="text-center text-green-600 font-bold truncate py-1 px-1">
+                                          <div>
+                                            {formatCurrency(item.odeme, item.paraBirimi)}
+                                            {/* Ödemeyi kimin yaptığını göster */}
+                                            {item.odemeYapan && (
+                                              <div className="text-[9px] text-gray-600 font-normal">
+                                                {item.odemeYapan}
+                                              </div>
+                                            )}
+                                          </div>
+                                        </TableCell>
+                                        <TableCell className={`text-center font-bold truncate py-1 px-1 ${item.kalan > 0 ? "text-red-600" : "text-green-600"}`}>
+                                          {formatCurrency(item.kalan, item.paraBirimi)}
+                                        </TableCell>
+                                        <TableCell className="text-center text-blue-600 font-medium truncate py-1 px-1">
+                                          {item.destinasyon}
+                                        </TableCell>
+                                        <TableCell className="text-center truncate py-1 px-1">
+                                          {item.musteri}
+                                        </TableCell>
+                                        <TableCell className="text-center font-medium py-1 px-1">
+                                          {item.kisi}
+                                        </TableCell>
+                                        <TableCell className="text-center truncate py-1 px-1">
+                                          {item.alisYeriDetay || item.alisYeri || "-"}
+                                        </TableCell>
+                                        <TableCell className="text-center py-1 px-1">
+                                          {item.alisDetay || item.alis || "-"}
+                                        </TableCell>
+                                        <TableCell className="text-center py-1 px-1">
+                                          <div className="flex gap-1">
+                                            {item.kalan > 0 && (
+                                              <div
+                                                className="inline-flex items-center justify-center gap-1 whitespace-nowrap rounded-md text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-green-300 bg-green-50 shadow-sm hover:bg-green-100 hover:text-green-900 px-1 py-0.5 h-5 cursor-pointer text-green-700"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleOdemeEkle(item);
+                                                }}
+                                                title="Ödeme Al"
+                                              >
+                                                <CreditCard className="w-2 h-2" />
+                                              </div>
+                                            )}
+                                            {item.kalan < 0 && (
+                                              <div
+                                                className="inline-flex items-center justify-center gap-1 whitespace-nowrap rounded-md text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-blue-300 bg-blue-50 shadow-sm hover:bg-blue-100 hover:text-blue-900 px-1 py-0.5 h-5 cursor-pointer text-blue-700"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleOdemeEkle(item, 'refund');
+                                                }}
+                                                title="Fazla Ödeme - Geri Öde"
+                                              >
+                                                <Plus className="w-2 h-2" />
+                                              </div>
+                                            )}
+                                            {item.kalan === 0 && (
+                                              <Badge className="bg-green-100 text-green-800 text-[8px] px-1 py-0">
+                                                ✓
+                                              </Badge>
+                                            )}
+                                          </div>
+                                        </TableCell>
+                                      </TableRow>
+                                    );
+                                  })}
                                 </TableBody>
                               </Table>
                             </div>
+                          </div>
+                        ) : (
+                          // Ödemeler Tab - Geliştirilmiş
+                          <div>
+                            <div className="flex items-center justify-between mb-3">
+                              <h3 className="text-lg font-semibold flex items-center gap-2">
+                                <CreditCard className="w-5 h-5" />
+                                Ödeme Geçmişi ({details.odemeler.length})
+                              </h3>
+                              <div className="flex gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    // Cari kartın ana para birimini belirle (en çok kullanılan para birimi)
+                                    const primaryCurrency = details.borclar.length > 0 ? 
+                                      details.borclar[0]?.paraBirimi || 'EUR' : 'EUR';
+                                    
+                                    setSelectedBorcForPayment({ 
+                                      cariId: cari.id, 
+                                      firma: cari.companyName, 
+                                      kalan: Math.abs(cari.balance), 
+                                      paraBirimi: primaryCurrency,
+                                      totalDebt: cari.totalDebt || 0
+                                    });
+                                    setOdemeForm({
+                                      tutar: "",
+                                      tarih: new Date().toISOString().split('T')[0],
+                                      aciklama: `${cari.companyName} genel tahsilat`,
+                                      odemeYontemi: "",
+                                      odemeYapan: cari.companyName, // Ödeme al → Cari firma
+                                      fisNumarasi: "",
+                                      paraBirimi: primaryCurrency,
+                                      odemeType: 'payment',
+                                    });
+                                    setShowOdemeDialog(true);
+                                  }}
+                                  className="text-green-600 border-green-300 hover:bg-green-50"
+                                >
+                                  <Plus className="w-4 h-4 mr-1" />
+                                  Ödeme Al
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    // Cari kartın ana para birimini belirle
+                                    const primaryCurrency = details.borclar.length > 0 ? 
+                                      details.borclar[0]?.paraBirimi || 'EUR' : 'EUR';
+                                    
+                                    setSelectedBorcForPayment({ 
+                                      cariId: cari.id, 
+                                      firma: "Nehir Turizm", // Geri ödeme bizim firmamızdan 
+                                      kalan: Math.abs(cari.balance), 
+                                      paraBirimi: primaryCurrency,
+                                      totalDebt: cari.totalDebt || 0
+                                    });
+                                    setOdemeForm({
+                                      tutar: "",
+                                      tarih: new Date().toISOString().split('T')[0],
+                                      aciklama: `${cari.companyName} geri ödeme`,
+                                      odemeYontemi: "",
+                                      odemeYapan: "Nehir Turizm", // Geri öde → Bizim firma
+                                      fisNumarasi: "",
+                                      paraBirimi: primaryCurrency, // Cari kartın ana para birimini kullan
+                                      odemeType: 'refund',
+                                    });
+                                    setShowOdemeDialog(true);
+                                  }}
+                                  className="text-blue-600 border-blue-300 hover:bg-blue-50"
+                                >
+                                  <Plus className="w-4 h-4 mr-1" />
+                                  Geri Öde
+                                </Button>
+                              </div>
+                            </div>
+                            
+                            {details.odemeler.length > 0 ? (
+                              <div className="rounded-md border overflow-x-auto">
+                                <Table>
+                                  <TableHeader>
+                                    <TableRow className="bg-gray-50">
+                                      <TableHead className="text-xs">ÖDEME TARİH</TableHead>
+                                      <TableHead className="text-xs">AÇIKLAMA</TableHead>
+                                      <TableHead className="text-xs">TÜR</TableHead>
+                                      <TableHead className="text-xs">Ö.YÖNTEMİ</TableHead>
+                                      <TableHead className="text-xs">FİRMA</TableHead>
+                                      <TableHead className="text-xs">CARİ</TableHead>
+                                      <TableHead className="text-xs">ÖDEME</TableHead>
+                                      <TableHead className="text-xs">KALAN</TableHead>
+                                      <TableHead className="text-xs text-center">İŞLEMLER</TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {details.odemeler.map((odeme) => {
+                                      console.log(`🧾 ÖDEME GÖSTERME - ID=${odeme.id}, Tutar=${odeme.tutar}, CariBakiye=${(odeme as any).cariBakiye}, ParaBirimi=${(odeme as any).paraBirimi}, Açıklama=${odeme.aciklama}`);
+                                      
+                                      // Rezervasyon bağlantılı ödeme mi kontrol et (hem reservationId hem de borcId kontrol et)
+                                      const isReservationLinked = (odeme.reservationId && odeme.reservationId.trim() !== '') || 
+                                                                 (odeme.borcId && odeme.borcId.trim() !== '');
+                                      
+                                      console.log(`🔍 Ödeme ${odeme.id}: Rezervasyon bağlantılı mı? ${isReservationLinked ? 'EVET ✅' : 'HAYIR ❌'}`);
+                                      console.log(`📋 Ödeme ${odeme.id}: reservationId=${odeme.reservationId || 'YOK'}, borcId=${odeme.borcId || 'YOK'}`);
+                                      
+                                      // Eski ödemeler için özel kontrol - eğer açıklama eski formatsa silinebilecek yap
+                                      const isLegacyPayment = !isReservationLinked || 
+                                                            (odeme.aciklama && (
+                                                              odeme.aciklama.includes('Ödeme eklendi') ||
+                                                              odeme.aciklama.includes('Genel ödeme') ||
+                                                              !odeme.aciklama.includes('Rezervasyon')
+                                                            ));
+                                      
+                                      const canDelete = !isReservationLinked || isLegacyPayment;
+                                      
+                                      // Bu ödemeye ait rezervasyon bilgilerini bul - daha kapsamlı arama
+                                      let reservationInfo = null;
+                                      if (details.detayliListe && details.detayliListe.length > 0) {
+                                        console.log(`🔎 Ödeme ${odeme.id} için ${details.detayliListe.length} rezervasyon arasında eşleşme aranıyor`);
+                                        
+                                        // 1. reservationId ile eşleştir (en güvenilir yöntem)
+                                        if (odeme.reservationId && odeme.reservationId.trim() !== '') {
+                                          reservationInfo = details.detayliListe.find((item: any) => 
+                                            item.reservationId === odeme.reservationId || 
+                                            item.id === odeme.reservationId
+                                          );
+                                          if (reservationInfo) {
+                                            console.log(`✅ Ödeme ${odeme.id}: reservationId='${odeme.reservationId}' ile eşleşen rezervasyon bulundu`);
+                                          } else {
+                                            console.log(`❌ Ödeme ${odeme.id}: reservationId='${odeme.reservationId}' ile eşleşen rezervasyon bulunamadı`);
+                                          }
+                                        }
+                                        
+                                        // 2. borcId ile eşleştir
+                                        if (!reservationInfo && odeme.borcId && odeme.borcId.trim() !== '') {
+                                          reservationInfo = details.detayliListe.find((item: any) => 
+                                            item.id === odeme.borcId ||
+                                            item.borcId === odeme.borcId
+                                          );
+                                          if (reservationInfo) {
+                                            console.log(`✅ Ödeme ${odeme.id}: borcId='${odeme.borcId}' ile eşleşen rezervasyon bulundu`);
+                                          } else {
+                                            console.log(`❌ Ödeme ${odeme.id}: borcId='${odeme.borcId}' ile eşleşen rezervasyon bulunamadı`);
+                                          }
+                                        }
+                                        
+                                        // 3. Tarih ve firma eşleştirmesi ile bul (son çare)
+                                        if (!reservationInfo && isReservationLinked) {
+                                          console.log(`⚠️ Ödeme ${odeme.id}: ID eşleşmesi yapılamadı, tarih bazlı eşleşme deneniyor`);
+                                          const odemeGunu = new Date(odeme.tarih).toDateString();
+                                          reservationInfo = details.detayliListe.find((item: any) => {
+                                            const rezervasyonGunu = new Date(item.turTarih).toDateString();
+                                            const odemeGunu2 = item.odemeTarih ? new Date(item.odemeTarih).toDateString() : null;
+                                            const tarihEslesiyor = odemeGunu === rezervasyonGunu || odemeGunu === odemeGunu2;
+                                            
+                                            if (tarihEslesiyor) {
+                                              console.log(`✅ Ödeme ${odeme.id}: tarih eşleşmesi bulundu. Ödeme=${odemeGunu}, Rezervasyon=${rezervasyonGunu}, Ödeme Tarihi=${odemeGunu2}`);
+                                            }
+                                            
+                                            return tarihEslesiyor;
+                                          });
+                                        }
+                                      }
+                                      
+                                      console.log(`📊 Ödeme ${odeme.id} için eşleşme sonucu:`, reservationInfo ? '✅ BULUNDU' : '❌ BULUNAMADI');
+                                      
+                                      return (
+                                        <TableRow key={odeme.id} className="text-xs">
+                                          {/* ÖDEME TARİH */}
+                                          <TableCell className="text-center">
+                                            {formatDate(odeme.tarih)}
+                                          </TableCell>
+                                          
+                                          {/* AÇIKLAMA */}
+                                          <TableCell className="truncate max-w-[200px]">
+                                            {odeme.aciklama}
+                                            {isReservationLinked && !reservationInfo && (
+                                              <div className="text-[8px] text-blue-500 mt-1">
+                                                (Rezervasyon Bağlantılı)
+                                              </div>
+                                            )}
+                                          </TableCell>
+                                          
+                                          {/* TÜR */}
+                                          <TableCell className="text-center">
+                                            <Badge 
+                                              variant={odeme.tutar > 0 ? "default" : "secondary"}
+                                              className={`text-[8px] px-1 py-0 ${
+                                                odeme.tutar > 0 
+                                                  ? 'bg-green-100 text-green-800' 
+                                                  : 'bg-blue-100 text-blue-800'
+                                              }`}
+                                            >
+                                              {odeme.tutar > 0 ? 'Tahsilat' : 'İade'}
+                                            </Badge>
+                                            {isReservationLinked && (
+                                              <div className="text-[8px] text-blue-600 font-medium mt-1">
+                                                (Rezervasyon)
+                                              </div>
+                                            )}
+                                          </TableCell>
+                                          
+                                          {/* Ö.YÖNTEMİ */}
+                                          <TableCell className="text-center">
+                                            {odeme.odemeYontemi || "-"}
+                                          </TableCell>
+                                          
+                                          {/* FİRMA - Ödeme yapan firma (cari kart sahibi veya bizim firma) */}
+                                          <TableCell className="text-center">
+                                            <div className="font-medium">
+                                              {(odeme as any).odemeYapan || 
+                                               (odeme.tutar > 0 ? cari.companyName : "Nehir Turizm")}
+                                            </div>
+                                          </TableCell>
+                                          
+                                          {/* CARİ - Ödeme anındaki genel bakiye (ödeme kaydında saklanır) */}
+                                          <TableCell className="text-center">
+                                            <div className={`font-medium`}>
+                                              {odeme.cariBakiye !== undefined
+                                                ? <span className={odeme.cariBakiye > 0 ? 'text-red-600' : odeme.cariBakiye < 0 ? 'text-green-600' : 'text-gray-500'}>
+                                                    {formatCurrency(Math.abs(odeme.cariBakiye), odeme.paraBirimi || 'EUR')}
+                                                  </span>
+                                                : "-"}
+                                            </div>
+                                          </TableCell>
+                                          
+                                          {/* ÖDEME */}
+                                          <TableCell className="text-center">
+                                            <div className={`font-medium ${
+                                              odeme.tutar > 0 ? 'text-green-600' : 'text-blue-600'
+                                            }`}>
+                                              {formatCurrency(Math.abs(odeme.tutar), (odeme as any).paraBirimi || 'EUR')}
+                                            </div>
+                                          </TableCell>
+                                          
+                                          {/* KALAN - Bu ödeme yapıldıktan sonraki kalan borç tutarı (ödeme para biriminde) */}
+                                          <TableCell className="text-center">
+                                            <div className="font-medium text-orange-600">
+                                              {odeme.cariBakiye !== undefined && odeme.tutar !== undefined
+                                                ? formatCurrency(Math.abs((odeme.cariBakiye || 0) - (odeme.tutar || 0)), odeme.paraBirimi || 'EUR')
+                                                : "-"}
+                                            </div>
+                                          </TableCell>
+                                          
+                                          {/* İŞLEMLER */}
+                                          <TableCell className="text-center">
+                                            <div className="flex gap-1 justify-center">
+                                              <Button
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() => {
+                                                  // Edit işlemi - ödeme formunu doldur
+                                                  setOdemeForm({
+                                                    tutar: Math.abs(odeme.tutar).toString(),
+                                                    paraBirimi: (odeme as any).paraBirimi || 'EUR',
+                                                    tarih: odeme.tarih.split('T')[0],
+                                                    aciklama: odeme.aciklama,
+                                                    odemeYontemi: odeme.odemeYontemi || '',
+                                                    odemeYapan: (odeme as any).odemeYapan || '',
+                                                    fisNumarasi: odeme.fisNumarasi || '',
+                                                    odemeType: odeme.tutar > 0 ? 'payment' : 'refund'
+                                                  });
+                                                  setSelectedBorcForPayment({
+                                                    cariId: cari.id,
+                                                    firma: cari.companyName,
+                                                    kalan: 0,
+                                                    paraBirimi: (odeme as any).paraBirimi || 'EUR',
+                                                    editingPaymentId: odeme.id
+                                                  });
+                                                  setShowOdemeDialog(true);
+                                                }}
+                                                disabled={!canDelete}
+                                                className={`h-6 px-2 ${
+                                                  canDelete 
+                                                    ? 'border-blue-300 text-blue-600 hover:bg-blue-50' 
+                                                    : 'border-gray-200 text-gray-400 cursor-not-allowed'
+                                                }`}
+                                                title={canDelete ? "Düzenle" : "Rezervasyon bağlantılı - düzenlenemez"}
+                                              >
+                                                <Edit className="w-3 h-3" />
+                                              </Button>
+                                              <Button
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={async () => {
+                                                  if (!canDelete) {
+                                                    toast({
+                                                      title: "Silinemez",
+                                                      description: "Rezervasyon bağlantılı ödemeler sadece rezervasyon sayfasından silinebilir.",
+                                                      variant: "destructive"
+                                                    });
+                                                    return;
+                                                  }
+                                                  
+                                                  if (confirm('Bu ödemeyi silmek istediğinizden emin misiniz?')) {
+                                                    try {
+                                                      if (!odeme.id) {
+                                                        toast({
+                                                          title: "Hata",
+                                                          description: "Ödeme ID'si bulunamadı",
+                                                          variant: "destructive"
+                                                        });
+                                                        return;
+                                                                                                           }
+                                                      
+                                                      await ReservationCariService.deletePayment(odeme.id, !!isLegacyPayment);
+                                                      toast({
+                                                        title: "Başarılı",
+                                                        description: "Ödeme başarıyla silindi"
+                                                      });
+                                                      // Detayları yeniden yükle
+                                                      await toggleCariExpansion(cari);
+                                                    } catch (error) {
+                                                      console.error('Ödeme silme hatası:', error);
+                                                      toast({
+                                                        title: "Hata",
+                                                        description: "Ödeme silinirken bir hata oluştu",
+                                                        variant: "destructive"
+                                                      });
+                                                    }
+                                                  }
+                                                }}
+                                                disabled={!canDelete}
+                                                className={`h-6 px-2 ${
+                                                  canDelete 
+                                                    ? 'border-red-300 text-red-600 hover:bg-red-50' 
+                                                    : 'border-gray-200 text-gray-400 cursor-not-allowed'
+                                                }`}
+                                                title={canDelete ? "Sil" : "Rezervasyon bağlantılı - silinemez"}
+                                              >
+                                                <Trash2 className="w-3 h-3" />
+                                              </Button>
+                                            </div>
+                                          </TableCell>
+                                        </TableRow>
+                                      );
+                                    })}
+                                  </TableBody>
+                                </Table>
+                              </div>
+                            ) : (
+                              <div className="text-center py-8 text-gray-500">
+                                <CreditCard className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                                <p>Henüz ödeme kaydı bulunmuyor</p>
+                                <p className="text-sm">Ödeme eklemek için yukarıdaki butonları kullanın</p>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -1212,92 +1714,288 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
         </Card>
       )}
 
-      {/* Ödeme Ekleme Dialog */}
+      {/* Geliştirilmiş Ödeme Ekleme Dialog */}
       <Dialog open={showOdemeDialog} onOpenChange={setShowOdemeDialog}>
-        <DialogContent>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Ödeme Ekle</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              {selectedBorcForPayment?.editingPaymentId ? (
+                <>
+                  <Edit className="w-5 h-5 text-orange-600" />
+                  Ödeme Düzenle
+                </>
+              ) : odemeForm.odemeType === 'refund' ? (
+                <>
+                  <Plus className="w-5 h-5 text-blue-600" />
+                  Geri Ödeme / İade
+                </>
+              ) : (
+                <>
+                  <CreditCard className="w-5 h-5 text-green-600" />
+                  Ödeme Al / Tahsilat
+                </>
+              )}
+            </DialogTitle>
           </DialogHeader>
           {selectedBorcForPayment && (
             <div className="space-y-4">
-              <div className="bg-gray-50 p-3 rounded">
-                <p className="text-sm"><strong>Rezervasyon:</strong> {selectedBorcForPayment.destinasyon} - {selectedBorcForPayment.musteri}</p>
-                <p className="text-sm"><strong>Tur Tarihi:</strong> {formatDate(selectedBorcForPayment.turTarih)}</p>
-                <p className="text-sm"><strong>Firma:</strong> {selectedBorcForPayment.firma}</p>
-                <p className="text-sm"><strong>Kalan Borç:</strong> {formatCurrency(selectedBorcForPayment.kalan, selectedBorcForPayment.paraBirimi)}</p>
-                {selectedBorcForPayment.alisYeriDetay && (
-                  <p className="text-sm"><strong>Alış Yeri:</strong> {selectedBorcForPayment.alisYeriDetay}</p>
+              {/* Bilgilendirici Banner - Küçültülmüş */}
+              <div className={`p-2 rounded-lg border ${
+                odemeForm.odemeType === 'refund' 
+                  ? 'bg-blue-50 border-blue-200' 
+                  : 'bg-green-50 border-green-200'
+              }`}>
+                <div className="flex items-center gap-2 mb-1">
+                  {odemeForm.odemeType === 'refund' ? (
+                    <Badge variant="secondary" className="bg-blue-100 text-blue-800 text-xs">
+                      Geri Ödeme
+                    </Badge>
+                  ) : (
+                    <Badge variant="secondary" className="bg-green-100 text-green-800 text-xs">
+                      Tahsilat
+                    </Badge>
+                  )}
+                </div>
+                
+                <p className="text-sm">
+                  <strong>Firma:</strong> {selectedBorcForPayment.firma}
+                </p>
+                
+                {selectedBorcForPayment.destinasyon && (
+                  <p className="text-xs text-gray-600">
+                    <strong>Rezervasyon:</strong> {selectedBorcForPayment.destinasyon} - {selectedBorcForPayment.musteri}
+                  </p>
+                )}
+                
+                {/* Para Birimi Bazında Borç Durumu */}
+                {selectedBorcForPayment.cariId && cariDetails[selectedBorcForPayment.cariId] && (
+                  <div className="mt-2 pt-2 border-t border-gray-200">
+                    <p className="text-xs font-medium text-gray-700 mb-1">Bu Carinin Para Birimi Durumu:</p>
+                    <div className="flex flex-wrap gap-1">
+                      {(() => {
+                        const currencyBalances: Record<string, number> = {};
+                        const details = cariDetails[selectedBorcForPayment.cariId];
+                        
+                        // Borçları topla
+                        details.borclar.forEach((borc: any) => {
+                          const currency = borc.paraBirimi || 'EUR';
+                          currencyBalances[currency] = (currencyBalances[currency] || 0) + ((borc.tutar || 0) - (borc.odeme || 0));
+                        });
+                        
+                        // Genel ödemeleri çıkar
+                        details.odemeler.forEach((odeme: any) => {
+                          const isGeneralPayment = !odeme.reservationId || odeme.reservationId.trim() === '';
+                          if (isGeneralPayment) {
+                            const currency = odeme.paraBirimi || 'EUR';
+                            currencyBalances[currency] = (currencyBalances[currency] || 0) - (odeme.tutar || 0);
+                          }
+                        });
+                        
+                        return Object.entries(currencyBalances)
+                          .filter(([_, balance]) => Math.abs(balance) > 0.01)
+                          .map(([currency, balance]) => (
+                            <Badge 
+                              key={currency} 
+                              variant="outline" 
+                              className={`text-xs ${balance > 0 ? 'border-red-200 text-red-700' : 'border-green-200 text-green-700'}`}
+                            >
+                              {currency}: {balance > 0 ? 'Borç' : 'Alacak'} {formatCurrency(Math.abs(balance), currency)}
+                            </Badge>
+                          ));
+                      })()}
+                    </div>
+                  </div>
                 )}
               </div>
               
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Ödeme Tutarı *</Label>
+              {/* Ödeme Türü Seçimi - Kompakt */}
+              <div className="space-y-2">
+                <Label className="text-sm">İşlem Türü</Label>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant={odemeForm.odemeType === 'payment' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setOdemeForm(prev => ({ 
+                      ...prev, 
+                      odemeType: 'payment',
+                      odemeYapan: selectedBorcForPayment?.firma || "Müşteri" // Ödeme al → Cari firma
+                    }))}
+                    className="flex-1 text-xs"
+                  >
+                    <CreditCard className="w-3 h-3 mr-1" />
+                    Ödeme Al
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={odemeForm.odemeType === 'refund' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setOdemeForm(prev => ({ 
+                      ...prev, 
+                      odemeType: 'refund',
+                      odemeYapan: "Nehir Turizm" // Geri öde → Bizim firma
+                    }))}
+                    className="flex-1 text-xs"
+                  >
+                    <Plus className="w-3 h-3 mr-1" />
+                    Geri Öde
+                  </Button>
+                </div>
+              </div>
+              
+              {/* Tutar ve Para Birimi - Tek Satır */}
+              <div className="grid grid-cols-3 gap-2">
+                <div className="col-span-2 space-y-1">
+                  <Label className="text-sm">
+                    {odemeForm.odemeType === 'refund' ? 'İade Tutarı' : 'Ödeme Tutarı'} *
+                  </Label>
                   <Input
                     type="number"
                     step="0.01"
                     value={odemeForm.tutar}
                     onChange={(e) => setOdemeForm({...odemeForm, tutar: e.target.value})}
                     placeholder="0.00"
+                    className={`text-sm ${odemeForm.odemeType === 'refund' ? 'border-blue-300' : 'border-green-300'}`}
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label>Ödeme Tarihi *</Label>
+                <div className="space-y-1">
+                  <Label className="text-sm">Para Birimi</Label>
+                  <Select value={odemeForm.paraBirimi} onValueChange={(value) => setOdemeForm({...odemeForm, paraBirimi: value})}>
+                    <SelectTrigger className="text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="EUR">EUR</SelectItem>
+                      <SelectItem value="TRY">TRY</SelectItem>
+                      <SelectItem value="USD">USD</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Seçilen Para Birimindeki Cari Bakiye Bilgisi */}
+              {selectedBorcForPayment?.cariId && (
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm font-medium text-gray-700">
+                      Seçilen Para Birimindeki ({odemeForm.paraBirimi}) Cari Bakiye:
+                    </div>
+                    <div className={`font-bold text-sm ${
+                      (() => {
+                        const currentBalance = getCurrentBalanceForCurrency(selectedBorcForPayment.cariId, odemeForm.paraBirimi);
+                        return currentBalance > 0 ? 'text-red-600' : currentBalance < 0 ? 'text-green-600' : 'text-gray-600';
+                      })()
+                    }`}>
+                      {(() => {
+                        const currentBalance = getCurrentBalanceForCurrency(selectedBorcForPayment.cariId, odemeForm.paraBirimi);
+                        return formatCurrency(Math.abs(currentBalance), odemeForm.paraBirimi);
+                      })()}
+                      {(() => {
+                        const currentBalance = getCurrentBalanceForCurrency(selectedBorcForPayment.cariId, odemeForm.paraBirimi);
+                        return currentBalance > 0 ? ' (Borç)' : currentBalance < 0 ? ' (Alacak)' : ' (Denge)';
+                      })()}
+                    </div>
+                  </div>
+                  {odemeForm.tutar && !isNaN(parseFloat(odemeForm.tutar)) && (
+                    <div className="mt-2 pt-2 border-t border-gray-300">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-gray-600">İşlem Sonrası Kalan:</span>
+                        <span className={`font-medium ${
+                          (() => {
+                            const currentBalance = getCurrentBalanceForCurrency(selectedBorcForPayment.cariId, odemeForm.paraBirimi);
+                            const amount = parseFloat(odemeForm.tutar);
+                            const finalAmount = odemeForm.odemeType === 'refund' ? -amount : amount;
+                            const remaining = currentBalance - finalAmount;
+                            return remaining > 0 ? 'text-red-600' : remaining < 0 ? 'text-green-600' : 'text-gray-600';
+                          })()
+                        }`}>
+                          {(() => {
+                            const currentBalance = getCurrentBalanceForCurrency(selectedBorcForPayment.cariId, odemeForm.paraBirimi);
+                            const amount = parseFloat(odemeForm.tutar);
+                            const finalAmount = odemeForm.odemeType === 'refund' ? -amount : amount;
+                            const remaining = currentBalance - finalAmount;
+                            return formatCurrency(Math.abs(remaining), odemeForm.paraBirimi);
+                          })()}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {/* Tarih ve Ödeme Yöntemi */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-sm">Tarih *</Label>
                   <Input
                     type="date"
                     value={odemeForm.tarih}
                     onChange={(e) => setOdemeForm({...odemeForm, tarih: e.target.value})}
+                    className="text-sm"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label>Ödeme Yöntemi</Label>
+                <div className="space-y-1">
+                  <Label className="text-sm">Ödeme Yöntemi</Label>
                   <Select value={odemeForm.odemeYontemi} onValueChange={(value) => setOdemeForm({...odemeForm, odemeYontemi: value})}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Ödeme yöntemi seçin" />
+                    <SelectTrigger className="text-sm">
+                      <SelectValue placeholder="Seçin" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Nakit">Nakit</SelectItem>
                       <SelectItem value="Kredi Kartı">Kredi Kartı</SelectItem>
                       <SelectItem value="Banka Havalesi">Banka Havalesi</SelectItem>
                       <SelectItem value="EFT">EFT</SelectItem>
-                      <SelectItem value="Çek">Çek</SelectItem>
+                      <SelectItem value="POS">POS</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
-                  <Label>Ödeme Yapan</Label>
-                  <Input
-                    value={odemeForm.odemeYapan}
-                    onChange={(e) => setOdemeForm({...odemeForm, odemeYapan: e.target.value})}
-                    placeholder="Ödemeyi yapan kişi"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Fiş Numarası</Label>
-                  <Input
-                    value={odemeForm.fisNumarasi}
-                    onChange={(e) => setOdemeForm({...odemeForm, fisNumarasi: e.target.value})}
-                    placeholder="Fiş/Fatura numarası"
-                  />
-                </div>
               </div>
-              <div className="space-y-2">
-                <Label>Açıklama *</Label>
+              
+              {/* Ödeme Yapan - Otomatik doldurulmuş */}
+              <div className="space-y-1">
+                <Label className="text-sm">Ödeme Yapan</Label>
+                <Input
+                  value={odemeForm.odemeYapan}
+                  onChange={(e) => setOdemeForm({...odemeForm, odemeYapan: e.target.value})}
+                  placeholder="Ödemeyi yapan firma/kişi"
+                  className="text-sm"
+                />
+              </div>
+              
+              {/* Açıklama */}
+              <div className="space-y-1">
+                <Label className="text-sm">Açıklama *</Label>
                 <Textarea
                   value={odemeForm.aciklama}
                   onChange={(e) => setOdemeForm({...odemeForm, aciklama: e.target.value})}
-                  placeholder="Ödeme açıklaması"
+                  placeholder={
+                    odemeForm.odemeType === 'refund' 
+                      ? 'İade nedeni ve detayları' 
+                      : 'Ödeme detayları ve açıklaması'
+                  }
                   rows={2}
+                  className="text-sm"
                 />
               </div>
             </div>
           )}
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setShowOdemeDialog(false)}>
+          <div className="flex justify-end gap-2 pt-3 border-t">
+            <Button variant="outline" size="sm" onClick={() => setShowOdemeDialog(false)}>
               İptal
             </Button>
-            <Button onClick={handleAddOdeme}>
-              Ödeme Ekle
+            <Button 
+              size="sm"
+              onClick={handleAddOdeme}
+              className={`${
+                odemeForm.odemeType === 'refund' 
+                  ? 'bg-blue-600 hover:bg-blue-700' 
+                  : 'bg-green-600 hover:bg-green-700'
+              }`}
+            >
+              {selectedBorcForPayment?.editingPaymentId 
+                ? 'Güncelle' 
+                : (odemeForm.odemeType === 'refund' ? 'İade Yap' : 'Ödeme Ekle')
+              }
             </Button>
           </div>
         </DialogContent>
