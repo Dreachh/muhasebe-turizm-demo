@@ -28,6 +28,21 @@ import {
 import { getDestinations, getReservationDestinations } from "@/lib/db-firebase"
 import { ReservationCariService } from "@/lib/reservation-cari-service" // Rezervasyon Cari Servisi
 
+// CSS stillerini tanımla - number input spinner'larını gizle
+const hideNumberSpinnerStyle = `
+  /* Chrome, Safari, Edge, Opera */
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  /* Firefox */
+  input[type="number"] {
+    -moz-appearance: textfield;
+  }
+`;
+
 // Katılımcı interface'i - Sadece gerekli alanları tut
 interface Katilimci {
   id: number
@@ -501,7 +516,39 @@ export function RezervasyonForm({
     if (!allowedKeys.includes(e.key) && !/[0-9]/.test(e.key)) {
       e.preventDefault()
     }
-  }  // Alış detay alanları fonksiyonu - Acenta hariç tümü manuel input
+  }
+
+  // Para miktarı input'u için key press handler - sadece sayı, nokta ve virgül
+  const handleMoneyKeyPress = (e: React.KeyboardEvent) => {
+    const allowedKeys = ['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown']
+    const allowedChars = /[0-9.,]/
+    
+    if (!allowedKeys.includes(e.key) && !allowedChars.test(e.key)) {
+      e.preventDefault()
+    }
+  }
+
+  // Para miktarı formatlaması - sadece sayı ve ondalık nokta/virgül
+  const formatMoney = (value: string) => {
+    // Boş değer kontrolü
+    if (!value || value.trim() === '') return ''
+    
+    // Sadece sayı, nokta ve virgülü tut, diğer karakterleri temizle
+    let cleanValue = value.replace(/[^0-9.,]/g, '')
+    
+    // Virgülü noktaya çevir (Türkçe klavye desteği)
+    cleanValue = cleanValue.replace(',', '.')
+    
+    // Birden fazla nokta varsa sadece ilkini tut
+    const parts = cleanValue.split('.')
+    if (parts.length > 2) {
+      cleanValue = parts[0] + '.' + parts.slice(1).join('')
+    }
+    
+    return cleanValue
+  }
+
+  // Alış detay alanları fonksiyonu - Acenta hariç tümü manuel input
   const getAlisDetayAlanlari = () => {
     switch (formData.alisYeri) {
       case "Otel":
@@ -1041,7 +1088,9 @@ export function RezervasyonForm({
   }
 
   return (
-    <div className="p-6">
+    <>
+      <style dangerouslySetInnerHTML={{ __html: hideNumberSpinnerStyle }} />
+      <div className="p-6">
       <Card className="max-w-4xl mx-auto">        <CardHeader>
           <CardTitle className="flex items-center justify-between">
             {isEditMode ? "Rezervasyon Düzenle" : "Yeni Rezervasyon Girişi"}
@@ -1395,16 +1444,16 @@ export function RezervasyonForm({
                       <Label htmlFor="toplamTutar">Toplam Tutar <span className="text-red-500">*</span></Label>
                       <Input
                         id="toplamTutar"
-                        type="number"
+                        type="text"
                         value={formData.toplamTutar || formData.tutar}
                         onChange={(e) => {
-                          handleInputChange("toplamTutar", e.target.value);
+                          const formattedValue = formatMoney(e.target.value);
+                          handleInputChange("toplamTutar", formattedValue);
                           // Geriye uyumluluk için tutar alanını da güncelle
-                          handleInputChange("tutar", e.target.value);
+                          handleInputChange("tutar", formattedValue);
                         }}
+                        onKeyPress={handleMoneyKeyPress}
                         placeholder="0.00"
-                        step="0.01"
-                        min="0"
                         className={!(formData.toplamTutar || formData.tutar) ? "border-red-300" : ""}
                       />
                     </div>
@@ -1504,12 +1553,14 @@ export function RezervasyonForm({
                         <Label htmlFor="odemeMiktari">Ödenen Miktar <span className="text-red-500">*</span></Label>
                         <Input
                           id="odemeMiktari"
-                          type="number"
+                          type="text"
                           value={formData.odemeMiktari}
-                          onChange={(e) => handleInputChange("odemeMiktari", e.target.value)}
+                          onChange={(e) => {
+                            const formattedValue = formatMoney(e.target.value);
+                            handleInputChange("odemeMiktari", formattedValue);
+                          }}
+                          onKeyPress={handleMoneyKeyPress}
                           placeholder="0.00"
-                          step="0.01"
-                          min="0"
                           className={!formData.odemeMiktari ? "border-red-300" : ""}
                         />
                       </div>
@@ -1813,5 +1864,6 @@ export function RezervasyonForm({
         </CardContent>
       </Card>
     </div>
+    </>
   )
 }
