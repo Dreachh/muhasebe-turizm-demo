@@ -266,14 +266,14 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
         
         setCariDetails(newCariDetails);
         console.log('📋 Tüm cari detayları yüklendi ve state\'e yazıldı');
+        
+        // İstatistikleri ve toplamları hesapla (newCariDetails kullanarak)
+        await calculateStatisticsAndTotals(data, newCariDetails);
       } catch (error) {
         console.error("Cari detayları toplu yükleme hatası:", error);
       } finally {
         setDetailsLoading(false);
       }
-      
-      // İstatistikleri de yükle
-      await loadStatistics();
     } catch (error) {
       console.error("Cari listesi yüklenirken hata:", error);
       toast({
@@ -375,17 +375,23 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
     }
   };
 
-  // İstatistikleri yükle - loadCariList içinde çağrılacak
-  const loadStatistics = async () => {
+  // İstatistikleri ve toplamları hesapla - parametre alarak çalışabilir
+  const calculateStatisticsAndTotals = async (cariListData?: ReservationCari[], cariDetailsData?: Record<string, any>) => {
     try {
-      // İstatistikleri cari listesinden hesapla
-      const totalCariCount = cariList.length;
+      // Mevcut state'leri veya parametre olarak geçilenleri kullan
+      const currentCariList = cariListData || cariList;
+      const currentCariDetails = cariDetailsData || cariDetails;
+      
+      // İstatistikleri hesapla
+      const totalCariCount = currentCariList.length;
       let totalReservations = 0;
       let paidReservations = 0;
       
-      Object.values(cariDetails).forEach(details => {
-        totalReservations += details.detayliListe.length;
-        paidReservations += details.detayliListe.filter(item => item.odemeDurumu === 'Ödendi').length;
+      Object.values(currentCariDetails).forEach(details => {
+        if (details && details.detayliListe) {
+          totalReservations += details.detayliListe.length;
+          paidReservations += details.detayliListe.filter((item: any) => item.odemeDurumu === 'Ödendi').length;
+        }
       });
       
       const unpaidReservations = totalReservations - paidReservations;
@@ -400,9 +406,10 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
       // Para birimi totalleri hesapla
       const newTotals: Record<string, { totalDebt: number; totalPayment: number; balance: number }> = {};
       
-      cariList.forEach(cari => {
-        const details = cariDetails[cari.id!];
-        if (details) {
+      currentCariList.forEach(cari => {
+        const details = currentCariDetails[cari.id!];
+        if (details && details.borclar) {
+          // 1. Rezervasyon borçları ve ödemeleri
           details.borclar.forEach((borc: any) => {
             const currency = borc.paraBirimi || 'EUR';
             if (!newTotals[currency]) {
@@ -412,14 +419,44 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
             newTotals[currency].totalPayment += borc.odeme || 0;
             newTotals[currency].balance += (borc.tutar || 0) - (borc.odeme || 0);
           });
+          
+          // 2. Genel ödemeleri de dahil et (reservationId olmayan ödemeler)
+          if (details.odemeler) {
+            details.odemeler.forEach((odeme: any) => {
+              // Sadece genel ödemeleri dahil et (rezervasyon bağlantılı olmayanlar)
+              const isGeneralPayment = !odeme.reservationId || odeme.reservationId.trim() === '';
+              
+              if (isGeneralPayment) {
+                const currency = odeme.paraBirimi || 'EUR';
+                if (!newTotals[currency]) {
+                  newTotals[currency] = { totalDebt: 0, totalPayment: 0, balance: 0 };
+                }
+                // Genel ödemeler sadece bakiyeyi etkiler
+                // Pozitif tutar = tahsilat (borcu azaltır), Negatif tutar = iade (borcu artırır)
+                newTotals[currency].balance -= odeme.tutar || 0;
+                // Toplam ödemeye de dahil et
+                if (odeme.tutar > 0) {
+                  newTotals[currency].totalPayment += odeme.tutar || 0;
+                }
+              }
+            });
+          }
         }
       });
 
       setTotals(newTotals);
-      console.log("İstatistikler güncellendi");
+      console.log("✅ İstatistikler ve toplamlar güncellendi:", {
+        statistics: { totalCariCount, totalReservations, paidReservations, unpaidReservations },
+        totals: newTotals
+      });
     } catch (error) {
-      console.error("İstatistik yükleme hatası:", error);
+      console.error("❌ İstatistik hesaplama hatası:", error);
     }
+  };
+
+  // Eski loadStatistics fonksiyonu - geriye uyumluluk için
+  const loadStatistics = async () => {
+    await calculateStatisticsAndTotals();
   };
 
   const toggleCariExpansion = async (cari: ReservationCari) => {
@@ -769,31 +806,31 @@ export default function ReservationCariKartlariEnhanced({ period }: ReservationC
   return (
     <div className="container mx-auto px-4 py-4 space-y-4 max-w-7xl">
       {/* Header */}
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-6 gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Rezervasyon Cari Kartları</h1>
-          <p className="text-gray-600">Dönem: {period}</p>
+          <h1 className="text-xl md:text-2xl font-bold text-gray-900">Rezervasyon Cari Kartları</h1>
+          <p className="text-gray-600 text-sm md:text-base">Dönem: {period}</p>
         </div>
         
-        {/* İstatistik Kartları ve Butonlar - Tek Satırda */}
-        <div className="flex items-center gap-4">
+        {/* İstatistik Kartları ve Butonlar */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
           {/* İstatistik Kartları */}
-          <div className="flex gap-2">
-            <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 min-w-[90px] text-center" title="Toplam cari kart sayısı">
-              <div className="text-blue-600 font-bold text-lg leading-tight">{statistics.totalCariCount}</div>
-              <div className="text-blue-700 text-[11px] font-medium">Toplam Cari</div>
+          <div className="flex flex-wrap gap-2">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg px-2 md:px-3 py-1 md:py-2 min-w-[70px] md:min-w-[90px] text-center" title="Toplam cari kart sayısı">
+              <div className="text-blue-600 font-bold text-sm md:text-lg leading-tight">{statistics.totalCariCount}</div>
+              <div className="text-blue-700 text-[9px] md:text-[11px] font-medium">Toplam Cari</div>
             </div>
-            <div className="bg-purple-50 border border-purple-200 rounded-lg px-3 py-2 min-w-[90px] text-center" title="Toplam rezervasyon sayısı">
-              <div className="text-purple-600 font-bold text-lg leading-tight">{statistics.totalReservations}</div>
-              <div className="text-purple-700 text-[11px] font-medium">Rezervasyon</div>
+            <div className="bg-purple-50 border border-purple-200 rounded-lg px-2 md:px-3 py-1 md:py-2 min-w-[70px] md:min-w-[90px] text-center" title="Toplam rezervasyon sayısı">
+              <div className="text-purple-600 font-bold text-sm md:text-lg leading-tight">{statistics.totalReservations}</div>
+              <div className="text-purple-700 text-[9px] md:text-[11px] font-medium">Rezervasyon</div>
             </div>
-            <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-2 min-w-[90px] text-center" title="Tamamen ödenmiş rezervasyonlar">
-              <div className="text-green-600 font-bold text-lg leading-tight">{statistics.paidReservations}</div>
-              <div className="text-green-700 text-[11px] font-medium">Ödenen</div>
+            <div className="bg-green-50 border border-green-200 rounded-lg px-2 md:px-3 py-1 md:py-2 min-w-[70px] md:min-w-[90px] text-center" title="Tamamen ödenmiş rezervasyonlar">
+              <div className="text-green-600 font-bold text-sm md:text-lg leading-tight">{statistics.paidReservations}</div>
+              <div className="text-green-700 text-[9px] md:text-[11px] font-medium">Ödenen</div>
             </div>
-            <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 min-w-[90px] text-center" title="Bekleyen veya kısmi ödenmiş rezervasyonlar">
-              <div className="text-red-600 font-bold text-lg leading-tight">{statistics.unpaidReservations}</div>
-              <div className="text-red-700 text-[11px] font-medium">Bekleyen</div>
+            <div className="bg-red-50 border border-red-200 rounded-lg px-2 md:px-3 py-1 md:py-2 min-w-[70px] md:min-w-[90px] text-center" title="Bekleyen veya kısmi ödenmiş rezervasyonlar">
+              <div className="text-red-600 font-bold text-sm md:text-lg leading-tight">{statistics.unpaidReservations}</div>
+              <div className="text-red-700 text-[9px] md:text-[11px] font-medium">Bekleyen</div>
             </div>
           </div>
           

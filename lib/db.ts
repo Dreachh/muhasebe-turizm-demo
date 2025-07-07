@@ -392,7 +392,7 @@ export const getReservations = async (): Promise<any[]> => {
   return getFirestoreReservations();
 };
 
-export const saveReservation = async (reservation: any): Promise<boolean> => {
+export const saveReservation = async (reservation: any): Promise<boolean | string> => {
   return saveFirestoreReservation(reservation);
 };
 

@@ -174,6 +174,8 @@ interface CustomerData {
 }
 
 export default function Home() {  const [currentView, setCurrentView] = useState<string>("splash")
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false)
   const [financialData, setFinancialData] = useState<FinancialData[]>([])
   const [toursData, setToursData] = useState<TourData[]>([])
   const [customersData, setCustomersData] = useState<CustomerData[]>([])
@@ -507,9 +509,47 @@ export default function Home() {  const [currentView, setCurrentView] = useState
 
   return (
     <div className="flex min-h-screen">
-      <Sidebar currentView={currentView} onNavigate={navigateTo} />
-      <div className="flex-1 flex flex-col min-h-screen ml-64">
-        <div className="flex-1">
+      {/* Mobile overlay */}
+      {mobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+      
+      {/* Sidebar */}
+      <div className={`${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 transition-transform duration-300 ease-in-out fixed md:relative z-50`}>
+        <Sidebar 
+          currentView={currentView} 
+          onNavigate={(view) => {
+            navigateTo(view);
+            setMobileMenuOpen(false); // Close mobile menu on navigation
+          }}
+          onCollapsedChange={setSidebarCollapsed}
+        />
+      </div>
+      
+      {/* Main content */}
+      <div className={`flex-1 flex flex-col min-h-screen transition-all duration-300 ${
+        sidebarCollapsed 
+          ? "md:ml-16 lg:ml-20" 
+          : "md:ml-56 lg:ml-64"
+      }`}>
+        {/* Mobile header with hamburger menu */}
+        <div className="md:hidden bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+          <h1 className="text-lg font-semibold text-gray-900">Nehir Travel</h1>
+          <div className="w-10"></div> {/* Spacer for centering */}
+        </div>
+        
+        <div className="flex-1 px-2 md:px-4 lg:px-6">
           <Toaster />
 
           {/* Ana içerik */}          {currentView === "main-dashboard" && (
@@ -866,7 +906,7 @@ export default function Home() {  const [currentView, setCurrentView] = useState
             <PeriodDataView />
           )}
         </div>
-        <footer className="py-4 px-6 text-center text-muted-foreground border-t bg-white">
+        <footer className="py-3 md:py-4 px-2 md:px-6 text-center text-muted-foreground border-t bg-white text-xs md:text-sm">
           <p>&copy; {new Date().getFullYear()} Nehir Travel Yönetim Sistemi. Tüm hakları saklıdır.</p>
         </footer>
       </div>

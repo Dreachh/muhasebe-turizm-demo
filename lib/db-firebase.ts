@@ -772,7 +772,7 @@ export async function getReservations(): Promise<any[]> {
   }
 }
 
-export async function saveReservation(reservation: any): Promise<boolean> {
+export async function saveReservation(reservation: any): Promise<boolean | string> {
   try {
     const firestore = getDb();
     if (!firestore) {
@@ -785,14 +785,14 @@ export async function saveReservation(reservation: any): Promise<boolean> {
         ...reservation,
         updatedAt: serverTimestamp()
       });
+      return true;
     } else {
-      await addDoc(collection(firestore, COLLECTIONS.reservations), {
+      const docRef = await addDoc(collection(firestore, COLLECTIONS.reservations), {
         ...reservation,
         createdAt: serverTimestamp()
       });
+      return docRef.id; // Yeni oluşturulan rezervasyonun ID'sini döndür
     }
-
-    return true;
   } catch (error) {
     console.error("Rezervasyon kaydedilirken hata:", error);
     return false;

@@ -54,6 +54,9 @@ export default function ReservationCariPrintPage() {
   const combinedData = useMemo(() => {
     const combined: any[] = [];
     
+    // Toplam kişi sayısını hesapla (rezervasyonlardan)
+    const totalKisi = detayliListe.reduce((total, item) => total + (item.kisi || 0), 0);
+    
     // Rezervasyon verilerini ekle
     detayliListe.forEach(item => {
       combined.push({
@@ -63,50 +66,99 @@ export default function ReservationCariPrintPage() {
       });
     });
     
-    // Ödeme verilerini ekle (sadece genel ödemeler - rezervasyon bağlantılı olmayanlar)
-    odemeDetaylar.forEach(odeme => {
-      const isGeneralPayment = !odeme.reservationId || odeme.reservationId.trim() === '';
-      if (isGeneralPayment) {
-        const isRefund = (odeme.tutar || 0) < 0;
-        const isTahsilat = (odeme.tutar || 0) > 0;
-        const paraBirimi = (odeme as any).paraBirimi || 'EUR';
-        
-        // Ödeme sonrası bakiye (cariBakiye - bu ödeme yapıldıktan sonraki durum)
-        const odemeSonrasiBakiye = (odeme as any).cariBakiye || 0;
-        
-        // Yapılan ödeme miktarı (mutlak değer)
-        const odemeMiktari = Math.abs(odeme.tutar || 0);
-        
-        // Ödeme öncesi bakiye hesaplama:
-        // cariBakiye + ödeme tutarı = ödeme öncesi durum
-        // (çünkü tahsilat borcu azaltır, iade borcu artırır)
-        const odemeOncesiBakiye = odemeSonrasiBakiye + (odeme.tutar || 0);
-        
-        combined.push({
-          id: `payment_${odeme.id}`,
-          type: 'payment',
-          sortDate: new Date(odeme.tarih),
-          // Ödeme verileri için mapping
-          turTarih: null, // T.TARİHİ boş
-          odemeTarih: odeme.tarih, // Ö.TARİHİ
-          musteri: odeme.aciklama || '', // MÜŞTERİ - açıklama
-          destinasyon: '', // DEST. boş
-          kisi: '', // KİŞİ boş  
-          alisYeri: '', // ALIŞ boş
-          tur: isRefund ? 'İade' : isTahsilat ? 'Tahsilat' : 'Ödeme', // TÜR
-          odemeYontemi: odeme.odemeYontemi || '', // Ö.YÖNTEMİ
-          firma: isRefund ? 'Nehir Turizm' : cari?.companyName || '', // FİRMA
-          tutar: Math.abs(odemeOncesiBakiye), // CARİ - ödeme öncesi borç durumu
-          odeme: odemeMiktari, // ÖDEME miktarı
-          odemeYapan: (odeme as any).odemeYapan || '', // ÖDEME YAPAN
-          kalan: Math.abs(odemeSonrasiBakiye), // KALAN - ödeme sonrası borç durumu
-          paraBirimi: paraBirimi
-        });
+    // Genel ödemeleri tarihe göre sırala (eskiden yeniye) ve her birinin o anki borç durumunu hesapla
+    const generalPayments = odemeDetaylar
+      .filter(odeme => !odeme.reservationId || odeme.reservationId.trim() === '')
+      .sort((a, b) => new Date(a.tarih).getTime() - new Date(b.tarih).getTime());
+    
+    // Her ödeme için o anki borç durumunu hesapla
+    generalPayments.forEach((odeme, index) => {
+      const isRefund = (odeme.tutar || 0) < 0;
+      const isTahsilat = (odeme.tutar || 0) > 0;
+      const paraBirimi = (odeme as any).paraBirimi || 'EUR';
+      
+      // Bu ödemeye kadar olan ödemeleri hesapla (kendisi dahil değil)
+      let cumulativePayments = 0;
+      for (let i = 0; i < index; i++) {
+        const prevPayment = generalPayments[i];
+        if ((prevPayment as any).paraBirimi === paraBirimi || (!((prevPayment as any).paraBirimi) && paraBirimi === 'EUR')) {
+          cumulativePayments += prevPayment.tutar || 0;
+        }
       }
+      
+      // İlk rezervasyon borçlarını hesapla
+      let initialDebt = 0;
+      detayliListe.forEach((item) => {
+        if ((item.paraBirimi || 'EUR') === paraBirimi) {
+          initialDebt += (item.tutar || 0) - (item.odeme || 0);
+        }
+      });
+      
+      // Bu ödeme öncesi borç durumu
+      const odemeOncesiBakiye = initialDebt - cumulativePayments;
+      
+      // Bu ödeme sonrası borç durumu
+      const odemeSonrasiBakiye = odemeOncesiBakiye - (odeme.tutar || 0);
+      
+      // Ödeme miktarı (mutlak değer)
+      const odemeMiktari = Math.abs(odeme.tutar || 0);
+      
+      combined.push({
+        id: `payment_${odeme.id}`,
+        type: 'payment',
+        sortDate: new Date(odeme.tarih),
+        // Ödeme verileri için mapping
+        turTarih: null, // T.TARİHİ boş
+        odemeTarih: odeme.tarih, // Ö.TARİHİ
+        musteri: odeme.aciklama || '', // MÜŞTERİ - açıklama
+        destinasyon: '', // DEST. boş
+        kisi: totalKisi, // KİŞİ - toplam kişi sayısı
+        alisYeri: '', // ALIŞ boş
+        tur: isRefund ? 'İade' : isTahsilat ? 'Tahsilat' : 'Ödeme', // TÜR
+        odemeYontemi: odeme.odemeYontemi || '', // Ö.YÖNTEMİ
+        tutar: Math.abs(odemeOncesiBakiye), // CARİ - ödeme öncesi borç durumu
+        odeme: odemeMiktari, // ÖDEME miktarı
+        odemeYapan: (odeme as any).odemeYapan || '', // ÖDEME YAPAN
+        odemeYapanFirma: isRefund ? 'Nehir Turizm' : cari?.companyName || '', // Firma bilgisi ayrı
+        kalan: Math.abs(odemeSonrasiBakiye), // KALAN - ödeme sonrası borç durumu
+        paraBirimi: paraBirimi,
+        // Sıralama için ödeme öncesi borç miktarı
+        sortAmount: Math.abs(odemeOncesiBakiye)
+      });
     });
     
-    // Tarihe göre sırala (eskiden yeniye)
-    return combined.sort((a, b) => a.sortDate.getTime() - b.sortDate.getTime());
+    // Sıralama: Rezervasyonlar kendi tarihi, ödemeler borç miktarına göre (yüksekten düşüğe)
+    return combined.sort((a, b) => {
+      // Önce tipine göre sırala (rezervasyon > tahsilat > iade)
+      const getTypePriority = (item: any) => {
+        if (item.type === 'reservation') return 1;
+        if (item.type === 'payment') {
+          if (item.tur === 'Tahsilat') return 2;
+          if (item.tur === 'İade') return 3;
+          return 2; // Diğer ödemeler tahsilat gibi davransın
+        }
+        return 4;
+      };
+      
+      const aPriority = getTypePriority(a);
+      const bPriority = getTypePriority(b);
+      
+      if (aPriority !== bPriority) {
+        return aPriority - bPriority;
+      }
+      
+      // Rezervasyonlar: tarihe göre sırala (yeniden eskiye)
+      if (a.type === 'reservation' && b.type === 'reservation') {
+        return b.sortDate.getTime() - a.sortDate.getTime();
+      }
+      
+      // Ödemeler: borç miktarına göre sırala (yüksekten düşüğe)
+      if (a.type === 'payment' && b.type === 'payment') {
+        return (b.sortAmount || 0) - (a.sortAmount || 0);
+      }
+      
+      return 0;
+    });
   }, [detayliListe, odemeDetaylar, cari]);
 
   useEffect(() => {
@@ -201,7 +253,7 @@ export default function ReservationCariPrintPage() {
       totals[currency].balance += (item.tutar || 0) - (item.odeme || 0);
     });
     
-    // Genel ödemeleri de bakiye hesaplamasına dahil et
+    // Genel ödemeleri de payment toplamına ve bakiye hesaplamasına dahil et
     odemeDetaylar.forEach(odeme => {
       const isGeneralPayment = !odeme.reservationId || odeme.reservationId.trim() === '';
       if (isGeneralPayment) {
@@ -209,6 +261,8 @@ export default function ReservationCariPrintPage() {
         if (!totals[currency]) {
           totals[currency] = { debt: 0, payment: 0, balance: 0 };
         }
+        // Genel ödemeleri payment toplamına ekle
+        totals[currency].payment += Math.abs(odeme.tutar || 0);
         // Genel ödemeler bakiyeyi etkiler (pozitif = tahsilat, negatif = iade)
         totals[currency].balance -= odeme.tutar || 0;
       }
@@ -385,9 +439,8 @@ export default function ReservationCariPrintPage() {
                     <th className="border border-gray-300 px-1 py-1 text-center text-[10px] font-bold">ALIŞ</th>
                     <th className="border border-gray-300 px-1 py-1 text-center text-[10px] font-bold">TÜR</th>
                     <th className="border border-gray-300 px-1 py-1 text-center text-[10px] font-bold">Ö.YÖNTEMİ</th>
-                    <th className="border border-gray-300 px-1 py-1 text-center text-[10px] font-bold">FİRMA</th>
                     <th className="border border-gray-300 px-1 py-1 text-center text-[10px] font-bold">CARİ</th>
-                    <th className="border border-gray-300 px-1 py-1 text-center text-[10px] font-bold">ÖDEME/YAPAN</th>
+                    <th className="border border-gray-300 px-1 py-1 text-center text-[10px] font-bold min-w-14 max-w-20">ÖDEME/YAPAN</th>
                     <th className="border border-gray-300 px-1 py-1 text-center text-[10px] font-bold">KALAN</th>
                   </tr>
                 </thead>
@@ -418,19 +471,18 @@ export default function ReservationCariPrintPage() {
                       <td className="border border-gray-300 px-1 py-0.5 text-center text-[10px]">
                         {item.odemeYontemi || "-"}
                       </td>
-                      <td className="border border-gray-300 px-1 py-0.5 text-[10px] leading-tight">
-                        {item.firma || '-'}
-                      </td>
                       <td className="border border-gray-300 px-1 py-0.5 text-right text-[10px]">
                         {item.tutar ? formatCurrency(item.tutar, item.paraBirimi) : '-'}
                       </td>
-                      <td className="border border-gray-300 px-1 py-0.5 text-center text-[10px] leading-tight">
-                        <div>
-                          {item.odeme ? formatCurrency(item.odeme, item.paraBirimi) : '-'}
-                          {item.odemeYapan && (
-                            <div className="text-[8px] text-gray-600">
-                              {item.odemeYapan}
-                            </div>
+                      <td className="border border-gray-300 px-1 py-0.5 text-center text-[10px] leading-tight min-w-14 max-w-20">
+                        <div className="flex items-center justify-center flex-wrap gap-1">
+                          <span className="font-medium text-[9px]">
+                            {item.odeme ? formatCurrency(item.odeme, item.paraBirimi) : '-'}
+                          </span>
+                          {(item.odemeYapan || item.odemeYapanFirma) && (
+                            <span className="text-[7px] text-gray-600 whitespace-nowrap">
+                              {item.odemeYapan || item.odemeYapanFirma}
+                            </span>
                           )}
                         </div>
                       </td>
@@ -443,7 +495,7 @@ export default function ReservationCariPrintPage() {
                 <tfoot>
                   {Object.entries(currencyTotals).map(([currency, totals], index) => (
                     <tr key={currency} className="bg-gray-200 font-bold h-8">
-                      <td colSpan={9} className="border border-gray-300 px-1 py-0.5 text-right text-[10px]">
+                      <td colSpan={8} className="border border-gray-300 px-1 py-0.5 text-right text-[10px]">
                         {index === 0 ? 'TOPLAM:' : ''} {currency}
                       </td>
                       <td className="border border-gray-300 px-1 py-0.5 text-right text-[10px]">
@@ -459,7 +511,7 @@ export default function ReservationCariPrintPage() {
                   ))}
                   {Object.keys(currencyTotals).length === 0 && (
                     <tr className="bg-gray-200 font-bold h-8">
-                      <td colSpan={7} className="border border-gray-300 px-1 py-0.5 text-right text-[10px]">
+                      <td colSpan={8} className="border border-gray-300 px-1 py-0.5 text-right text-[10px]">
                         TOPLAM:
                       </td>
                       <td className="border border-gray-300 px-1 py-0.5 text-right text-[10px]">

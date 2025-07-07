@@ -713,6 +713,7 @@ export function RezervasyonForm({
       const kayitTarihi = format(new Date(), "yyyy-MM-dd HH:mm:ss")
       
       let success = false;
+      let newReservationId = null;
 
       if (isEditMode && originalReservationId) {
         // Güncelleme işlemi - ID'li obje gönder
@@ -737,7 +738,15 @@ export function RezervasyonForm({
           createdAt: new Date().toISOString(),
           status: 'active'
         }
-        success = await saveReservation(reservationData);      }if (success) {
+        const result = await saveReservation(reservationData);
+        if (typeof result === 'string') {
+          // Yeni rezervasyon başarıyla kaydedildi ve ID döndürüldü
+          success = true;
+          newReservationId = result;
+        } else {
+          success = result;
+        }
+      }if (success) {
         // ÖNEMLİ: Sadece yeni rezervasyon başarıyla kaydedildikten sonra seri numarayı artır
         if (!isEditMode) {
           try {
@@ -751,13 +760,13 @@ export function RezervasyonForm({
         console.log('Rezervasyon başarıyla kaydedildi/güncellendi');
 
         // Rezervasyon cari oluşturma (sadece yeni rezervasyon için)
-        if (!isEditMode && formData.firma && (formData.toplamTutar || formData.tutar)) {
+        if (!isEditMode && newReservationId && formData.firma && (formData.toplamTutar || formData.tutar)) {
           try {
             const currentYear = new Date().getFullYear().toString();
             
             // Rezervasyon verilerini hazırla
             const reservationForCari = {
-              id: seriNumarasi, // Seri numarası rezervasyon ID olarak kullanılıyor
+              id: newReservationId, // Gerçek Firebase rezervasyon ID'si
               seriNumarasi: seriNumarasi,
               firma: formData.firma,
               telefonKisi: formData.yetkiliKisi,
@@ -789,7 +798,7 @@ export function RezervasyonForm({
             // Cari oluşturma hatası rezervasyon kaydını etkilemesin
           }
         } else {
-          console.log('Cari oluşturma atlandı. İsEditMode:', isEditMode, 'Firma:', formData.firma, 'Tutar:', formData.toplamTutar || formData.tutar);
+          console.log('Cari oluşturma atlandı. İsEditMode:', isEditMode, 'NewReservationId:', newReservationId, 'Firma:', formData.firma, 'Tutar:', formData.toplamTutar || formData.tutar);
         }
 
         // Düzenleme modunda da cari güncelle (varsa)
