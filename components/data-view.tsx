@@ -244,29 +244,22 @@ export function DataView({
     return formatCurrencyGroups(totals);
   };
 
-  // Komponent yüklendiğinde destinasyon verilerini al
+  // Komponent yüklendiğinde destinasyon verilerini Firebase'den al
   useEffect(() => {
-    // Önce localStorage'dan destinasyon verilerini almayı dene
-    try {
-      const savedDestinations = localStorage.getItem('destinations');
-      if (savedDestinations) {
-        setDestinations(JSON.parse(savedDestinations));
-      } else {
-        // localStorage'da yok ise, sample-destinations.json dosyasını yükle
-        fetch('/data/sample-destinations.json')
-          .then(response => response.json())
-          .then(data => {
-            setDestinations(data);
-            // Aynı zamanda gelecekte kullanmak için localStorage'a kaydet
-            localStorage.setItem('destinations', JSON.stringify(data));
-          })
-          .catch(error => {
-            console.error('Destinasyon verisi yüklenemedi:', error);
-          });
+    // Firebase'den destinasyon verilerini al (tur satışı için)
+    const loadDestinationsFromFirebase = async () => {
+      try {
+        // Import the function if not already imported
+        const { getDestinations } = await import("@/lib/db-firebase");
+        const firebaseDestinations = await getDestinations();
+        setDestinations(firebaseDestinations);
+      } catch (error) {
+        console.error('Firebase destinasyon verisi alınırken hata oluştu:', error);
+        setDestinations([]); // Hata durumunda boş liste
       }
-    } catch (error) {
-      console.error('Destinasyon verisi alınırken hata oluştu:', error);
-    }
+    };
+    
+    loadDestinationsFromFirebase();
   }, []);
 
   // Tabloları sıralamak için kullanılan fonksiyon artık yukarıda tanımlandı

@@ -506,54 +506,12 @@ export function SettingsView({
         if (activitiesData && activitiesData.length > 0) {
           setActivities(activitiesData)
         } else {
-          // Örnek aktiviteler ekle
-          const exampleActivities = [
-            {
-              id: generateUUID(),
-              name: "Tekne Turu",
-              description: "Koylar arası tekne gezisi",
-              defaultDuration: "8 saat",
-              defaultPrice: "750",
-              defaultCurrency: "TRY"
-            },
-            {
-              id: generateUUID(),
-              name: "Jeep Safari",
-              description: "Doğa içinde arazi aracı turu",
-              defaultDuration: "6 saat",
-              defaultPrice: "600",
-              defaultCurrency: "TRY"
-            },
-            {
-              id: generateUUID(),
-              name: "Paraşüt",
-              description: "Yamaç paraşütü aktivitesi",
-              defaultDuration: "2 saat",
-              defaultPrice: "1200",
-              defaultCurrency: "TRY"
-            },
-            {
-              id: generateUUID(),
-              name: "Rafting",
-              description: "Nehirde rafting aktivitesi",
-              defaultDuration: "4 saat",
-              defaultPrice: "500",
-              defaultCurrency: "TRY"
-            },
-            {
-              id: generateUUID(),
-              name: "Dalış",
-              description: "Deniz dalışı aktivitesi",
-              defaultDuration: "3 saat",
-              defaultPrice: "900",
-              defaultCurrency: "TRY"
-            }
-          ];
-          setActivities(exampleActivities);
-          await saveActivities(exampleActivities);
+          // Firebase'de veri yoksa boş liste ayarla
+          setActivities([])
         }
       } catch (error) {
         console.error("Aktiviteler yüklenirken hata:", error)
+        setActivities([])
       }
     }
 
@@ -563,83 +521,12 @@ export function SettingsView({
         if (destinationsData && destinationsData.length > 0) {
           setDestinations(destinationsData)
         } else {
-          // Örnek destinasyonlar ekle
-          const exampleDestinations = [
-            {
-              id: generateUUID(),
-              name: "Antalya",
-              country: "Türkiye",
-              region: "Akdeniz",
-              description: "Türkiye'nin turizm başkenti"
-            },
-            {
-              id: generateUUID(),
-              name: "Bodrum",
-              country: "Türkiye",
-              region: "Ege",
-              description: "Lüks tatil beldesi"
-            },
-            {
-              id: generateUUID(),
-              name: "Kapadokya",
-              country: "Türkiye",
-              region: "İç Anadolu",
-              description: "Peri bacaları ve balon turları"
-            },
-            {
-              id: generateUUID(),
-              name: "İstanbul",
-              country: "Türkiye", 
-              region: "Marmara",
-              description: "Tarihi ve kültürel zenginlikler şehri"
-            },
-            {
-              id: generateUUID(),
-              name: "Fethiye",
-              country: "Türkiye",
-              region: "Akdeniz",
-              description: "Doğal güzellikleriyle ünlü tatil beldesi"
-            },
-            {
-              id: generateUUID(),
-              name: "Paris",
-              country: "Fransa",
-              region: "Avrupa",
-              description: "Aşk ve sanat şehri"
-            },
-            {
-              id: generateUUID(),
-              name: "Roma",
-              country: "İtalya",
-              region: "Avrupa",
-              description: "Tarihi yapılarıyla ünlü İtalya'nın başkenti"
-            },
-            {
-              id: generateUUID(),
-              name: "Barselona",
-              country: "İspanya",
-              region: "Avrupa",
-              description: "Mimari eserleri ve plajlarıyla ünlü şehir"
-            },
-            {
-              id: generateUUID(),
-              name: "Dubai",
-              country: "Birleşik Arap Emirlikleri",
-              region: "Orta Doğu",
-              description: "Lüks alışveriş ve yüksek gökdelenler"
-            },
-            {
-              id: generateUUID(),
-              name: "Londra",
-              country: "İngiltere",
-              region: "Avrupa",
-              description: "Birleşik Krallık'ın başkenti"
-            }
-          ];
-          setDestinations(exampleDestinations);
-          await saveDestinations(exampleDestinations);
-        }      } catch (error) {
+          // Firebase'de veri yoksa boş liste ayarla
+          setDestinations([])
+        }
+      } catch (error) {
         console.error("Destinasyonlar yüklenirken hata:", error)
+        setDestinations([])
       }
     }
 

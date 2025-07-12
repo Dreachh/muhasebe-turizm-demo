@@ -10,7 +10,7 @@ import { SettingsView } from "../components/settings-view"
 import { EnhancedAnalyticsView } from "../components/enhanced-analytics-view"
 import { DashboardView } from "../components/dashboard-view"
 import { CalendarView } from "../components/calendar-view"
-import { BackupRestoreView } from "../components/backup-restore"
+import { BackupRestore } from "../components/backup-restore"
 import { SplashScreen } from "../components/splash-screen"
 import { Toaster } from "../components/ui/toaster"
 import { useToast } from "../components/ui/use-toast"
@@ -37,6 +37,7 @@ import { createCustomerDebtsFromTour } from "@/lib/debt-service";
 import { RezervasyonForm } from "@/components/rezervasyon/rezervasyon-form";
 import { RezervasyonListe } from "../components/rezervasyon/rezervasyon-liste" // Rezervasyon liste
 import { Rezervasyon } from "@/types/rezervasyon-types";
+import { ReservationCariService } from "../lib/reservation-cari-service";
 
 // Uygulama verilerini tamamen sıfırlamak için fonksiyon
 const resetAllData = async () => {
@@ -180,6 +181,7 @@ export default function Home() {  const [currentView, setCurrentView] = useState
   const [toursData, setToursData] = useState<TourData[]>([])
   const [customersData, setCustomersData] = useState<CustomerData[]>([])
   const [reservationsData, setReservationsData] = useState<Rezervasyon[]>([]) // Rezervasyon verileri için yeni state
+  const [reservationCariData, setReservationCariData] = useState<any[]>([]) // Rezervasyon cari verileri için yeni state
   const [destinationsData, setDestinationsData] = useState<any[]>([]) // Destinasyon verileri
   const [tourTemplatesData, setTourTemplatesData] = useState<any[]>([]) // Şablon verileri
   const [editingRecord, setEditingRecord] = useState<any>(null)
@@ -215,6 +217,17 @@ export default function Home() {  const [currentView, setCurrentView] = useState
         destinations: destinations.length,
         templates: templates.length
       });
+      
+      // Rezervasyon cari verilerini yükle
+      try {
+        const currentPeriod = new Date().getFullYear().toString();
+        const reservationCariList = await ReservationCariService.getAllCari(currentPeriod);
+        setReservationCariData(reservationCariList);
+        console.log("✅ Rezervasyon cari verileri yüklendi:", reservationCariList.length);
+      } catch (cariError) {
+        console.error("Rezervasyon cari verileri yüklenirken hata:", cariError);
+        setReservationCariData([]);
+      }
       
       // Debug: Destinasyon verilerini logla
       console.log("🔍 Destinations verisi:", destinations);
@@ -839,14 +852,14 @@ export default function Home() {  const [currentView, setCurrentView] = useState
                 };
               })}
               customersData={customersData}
+              reservationsData={reservationsData}
+              reservationCariData={reservationCariData}
               onNavigate={navigateTo}
             />
           )}
           {currentView === "backup-restore" && (
-            <BackupRestoreView
-              onClose={() => navigateTo("main-dashboard")}
-              onExport={handleExportData}
-              onImport={handleImportData}
+            <BackupRestore
+              onComplete={() => navigateTo("main-dashboard")}
             />
           )}
           {currentView === "settings" && (

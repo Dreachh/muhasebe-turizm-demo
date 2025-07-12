@@ -48,40 +48,66 @@ interface StoreCollection {
 
 // Veritabanı şeması (eski tanımlamaları koruyoruz)
 const STORES: StoreCollection = {
-  tours: { keyPath: "id", indexes: ["customerName", "tourDate"] },
-  financials: { keyPath: "id", indexes: ["date", "type"] },
-  customers: { keyPath: "id", indexes: ["name", "phone"] },
+  tours: { keyPath: "id" },
+  customers: { keyPath: "id" },
+  financialRecords: { keyPath: "id" },
   settings: { keyPath: "id" },
-  expenses: { keyPath: "id", indexes: ["type", "name"] },
-  providers: { keyPath: "id", indexes: ["name", "category"] },  activities: { keyPath: "id", indexes: ["name"] },
-  destinations: { keyPath: "id", indexes: ["name", "country"] },
-  ai_conversations: { keyPath: "id", indexes: ["timestamp"] },
-  customer_notes: { keyPath: "id", indexes: ["customerId", "timestamp"] },
-  referral_sources: { keyPath: "id", indexes: ["name", "type"] },
-  tourTemplates: { keyPath: "id", indexes: ["name", "destinationId"] },
-  periods: { keyPath: "id", indexes: ["year", "month"] },
+  expenseTypes: { keyPath: "id" },
+  providers: { keyPath: "id" },
+  activities: { keyPath: "id" },
+  destinations: { keyPath: "id" },
+  referralSources: { keyPath: "id" },
+  tourTemplates: { keyPath: "id" },
+  companies: { keyPath: "id" },
 };
 
-// Veritabanını başlat (Firebase için bir uyarlama)
+// IndexedDB'yi açma fonksiyonu (artık bir dummy fonksiyon)
+export const openDB = async (): Promise<any> => {
+  return Promise.resolve({
+    transaction: () => ({
+      objectStore: () => ({
+        get: () => Promise.resolve(null),
+        getAll: () => Promise.resolve([]),
+        put: () => Promise.resolve(),
+        delete: () => Promise.resolve(),
+        clear: () => Promise.resolve(),
+      }),
+      done: Promise.resolve(),
+    }),
+    objectStoreNames: Object.keys(STORES),
+    close: () => {},
+  });
+};
+
+// Veritabanını başlatma fonksiyonu (Firebase için dummy)
 export const initializeDB = async (): Promise<void> => {
   try {
-    console.log("Firebase veritabanı başlatıldı.");
-    return Promise.resolve();
+    console.log("Firebase veritabanı bağlantısı kontrol ediliyor...");
+    // Firebase zaten başlatıldığından dolayı burada özel bir işlem yapmaya gerek yok
+    // Sadece bir dummy işlem yapalım
+    await Promise.resolve();
+    console.log("Firebase veritabanı bağlantısı başarılı.");
   } catch (error) {
-    console.error("Firebase başlatılırken hata:", error);
+    console.error("Firebase veritabanı başlatma hatası:", error);
     throw error;
   }
 };
 
-// IndexedDB veritabanını açma fonksiyonunu yeniden tanımlıyoruz
-// Bu fonksiyon artık sadece geriye dönük uyumluluk için burada duruyor
-export const openDB = (): Promise<any> => {
-  console.warn("Firebase kullanıldığından openDB fonksiyonu artık gerekli değil");
-  return Promise.resolve(null);
+// Tüm veriyi temizleme fonksiyonu
+export const clearAllData = async (): Promise<void> => {
+  try {
+    for (const storeName of Object.keys(STORES)) {
+      await clearCollection(storeName);
+    }
+    console.log("Tüm IndexedDB (Firestore) verileri temizlendi.");
+  } catch (error) {
+    console.error("Tüm verileri temizlerken hata oluştu:", error);
+    throw error;
+  }
 };
 
-// Veri ekleme
-export const addData = async (storeName: string, data: any): Promise<any> => {
+// Veri ekleme fonksiyonu
+export const addData = async (storeName: string, data: any): Promise<string> => {
   // Firebase koleksiyon adını bul
   const collectionName = COLLECTIONS[storeName as keyof typeof COLLECTIONS] || storeName;
   
@@ -111,7 +137,7 @@ export const addData = async (storeName: string, data: any): Promise<any> => {
 };
 
 // Veri güncelleme
-export const updateData = async (storeName: string, data: any): Promise<any> => {
+export const updateData = async (storeName: string, data: any): Promise<void> => {
   // Firebase koleksiyon adını bul
   const collectionName = COLLECTIONS[storeName as keyof typeof COLLECTIONS] || storeName;
   

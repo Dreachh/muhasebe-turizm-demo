@@ -5,11 +5,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DatePickerWithRange } from "@/components/ui/date-range-picker"
-import { BarChart2, DollarSign, Users, Calendar, Filter, Wallet } from "lucide-react"
+import { BarChart2, DollarSign, Users, Calendar, Filter, Wallet, CalendarCheck } from "lucide-react"
 import { CurrencyFinancialSummary } from "@/components/analytics/currency-financial-summary"
 import { CustomerAnalytics } from "@/components/analytics/customer-analytics"
 import { TourDetailedAnalytics } from "@/components/analytics/tour-detailed-analytics"
 import { SupplierDebtAnalysis } from "@/components/analytics/supplier-debt-analysis"
+import { ReservationAnalytics } from "@/components/analytics/reservation-analytics"
 import { getDestinations } from "@/lib/db"
 import { useToast } from "@/components/ui/use-toast"
 import { DateRange } from "react-day-picker"
@@ -31,10 +32,18 @@ type EnhancedAnalyticsViewProps = {
   financialData: DataItem[];
   toursData: DataItem[];
   customersData: DataItem[];
+  reservationsData?: DataItem[]; // Rezervasyon verileri için yeni prop
+  reservationCariData?: DataItem[]; // Rezervasyon cari verileri için yeni prop
   onNavigate?: (view: string) => void; // Navigation prop eklendi
 };
 
-export function EnhancedAnalyticsView({ financialData = [], toursData = [], customersData = [] }: EnhancedAnalyticsViewProps) {
+export function EnhancedAnalyticsView({ 
+  financialData = [], 
+  toursData = [], 
+  customersData = [],
+  reservationsData = [],
+  reservationCariData = []
+}: EnhancedAnalyticsViewProps) {
   const { toast } = useToast()
   const [activeTab, setActiveTab] = useState("financial")
   const [selectedCurrency, setSelectedCurrency] = useState("all")
@@ -51,6 +60,8 @@ export function EnhancedAnalyticsView({ financialData = [], toursData = [], cust
   const [filteredFinancialData, setFilteredFinancialData] = useState<DataItem[]>(financialData)
   const [filteredToursData, setFilteredToursData] = useState<DataItem[]>(toursData)
   const [filteredCustomersData, setFilteredCustomersData] = useState<DataItem[]>(customersData)
+  const [filteredReservationsData, setFilteredReservationsData] = useState<DataItem[]>(reservationsData)
+  const [filteredReservationCariData, setFilteredReservationCariData] = useState<DataItem[]>(reservationCariData)
   
   // Destinasyonları yükle
   useEffect(() => {
@@ -124,7 +135,9 @@ export function EnhancedAnalyticsView({ financialData = [], toursData = [], cust
     setFilteredFinancialData(filterDataByDateRange(financialData));
     setFilteredToursData(filterDataByDateRange(toursData));
     setFilteredCustomersData(filterDataByDateRange(customersData));
-  }, [isDateFilterActive, dateRange, financialData, toursData, customersData]);
+    setFilteredReservationsData(filterDataByDateRange(reservationsData));
+    setFilteredReservationCariData(filterDataByDateRange(reservationCariData));
+  }, [isDateFilterActive, dateRange, financialData, toursData, customersData, reservationsData, reservationCariData]);
 
   return (
     <Card className="w-full">
@@ -197,6 +210,10 @@ export function EnhancedAnalyticsView({ financialData = [], toursData = [], cust
                     <Wallet className="h-4 w-4 mr-2" />
                     Tedarikçi Borç Analizi
                   </TabsTrigger>
+                  <TabsTrigger value="reservations">
+                    <CalendarCheck className="h-4 w-4 mr-2" />
+                    Rezervasyon Analizleri
+                  </TabsTrigger>
                 </TabsList>
               </div>
 
@@ -224,6 +241,15 @@ export function EnhancedAnalyticsView({ financialData = [], toursData = [], cust
 
               <TabsContent value="supplierDebt">
                 <SupplierDebtAnalysis 
+                  selectedCurrency={selectedCurrency}
+                  dateRange={isDateFilterActive ? dateRange : undefined}
+                />
+              </TabsContent>
+
+              <TabsContent value="reservations">
+                <ReservationAnalytics 
+                  reservationsData={filteredReservationsData}
+                  reservationCariData={filteredReservationCariData}
                   selectedCurrency={selectedCurrency}
                   dateRange={isDateFilterActive ? dateRange : undefined}
                 />

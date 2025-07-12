@@ -12,6 +12,8 @@ import {
   deleteDoc,
   getDoc,
   Timestamp,
+  writeBatch,
+  deleteField,
 } from "firebase/firestore";
 
 // Rezervasyon Cari Interface'leri
@@ -369,23 +371,61 @@ export class ReservationCariService {
   static async getAllCari(period: string): Promise<ReservationCari[]> {
     try {
       const db = this.getFirestore();
-      const q = query(
-        collection(db, COLLECTIONS.reservation_cari),
+      
+      // Sadece aktif borç veya ödeme kaydı olan carileri getir
+      const borcQuery = query(
+        collection(db, COLLECTIONS.reservation_cari_borclar),
         where("period", "==", period)
       );
       
-      const querySnapshot = await getDocs(q);
-      const cariList: ReservationCari[] = [];
+      const odemeQuery = query(
+        collection(db, COLLECTIONS.reservation_cari_odemeler),
+        where("period", "==", period)
+      );
       
-      querySnapshot.forEach((doc) => {
-        cariList.push({
-          id: doc.id,
-          ...doc.data(),
-        } as ReservationCari);
+      // Borç ve ödeme kayıtlarını paralel olarak getir
+      const [borcSnapshot, odemeSnapshot] = await Promise.all([
+        getDocs(borcQuery),
+        getDocs(odemeQuery)
+      ]);
+      
+      // Aktif cari ID'lerini topla
+      const aktiveCariIds = new Set<string>();
+      
+      borcSnapshot.forEach(doc => {
+        const data = doc.data();
+        if (data.cariId) aktiveCariIds.add(data.cariId);
       });
       
-      // Client-side sıralama
-      return cariList.sort((a, b) => b.updatedAt.toMillis() - a.updatedAt.toMillis());
+      odemeSnapshot.forEach(doc => {
+        const data = doc.data();
+        if (data.cariId) aktiveCariIds.add(data.cariId);
+      });
+      
+      console.log(`Aktif cari sayısı: ${aktiveCariIds.size}`);
+      
+      if (aktiveCariIds.size === 0) {
+        return [];
+      }
+      
+      // Aktif carilerin bilgilerini getir
+      const cariSnapshots = await Promise.all(
+        Array.from(aktiveCariIds).map(cariId => 
+          getDoc(doc(db, COLLECTIONS.reservation_cari, cariId))
+        )
+      );
+      
+      // Var olan ve geçerli cari kartlarını döndür
+      const validCariList = cariSnapshots
+        .filter(doc => doc.exists())
+        .map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as ReservationCari[];
+      
+      // Boş olmayan carileri döndür
+      return validCariList;
+      
     } catch (error) {
       console.error("Cari listesi getirme hatası:", error);
       throw error;
@@ -834,53 +874,47 @@ export class ReservationCariService {
       
       console.log(`Rezervasyon cari temizliği başlatılıyor: ${reservationId}`);
       
-      // Bu rezervasyona ait borç kayıtlarını bul (hem reservationId hem de seriNumarasi ile ara)
-      const borcQuery1 = query(
-        collection(db, COLLECTIONS.reservation_cari_borclar),
-        where("reservationId", "==", reservationId)
-      );
-      
-      const borcQuery2 = query(
-        collection(db, COLLECTIONS.reservation_cari_borclar),
-        where("reservationSeriNo", "==", reservationId)
-      );
-      
+      // Bu rezervasyona ait tüm borç kayıtlarını bul (hem reservationId hem de seriNumarasi ile ara)
       const [borcSnapshot1, borcSnapshot2] = await Promise.all([
-        getDocs(borcQuery1),
-        getDocs(borcQuery2)
+        getDocs(query(
+          collection(db, COLLECTIONS.reservation_cari_borclar),
+          where("reservationId", "==", reservationId)
+        )),
+        getDocs(query(
+          collection(db, COLLECTIONS.reservation_cari_borclar),
+          where("reservationSeriNo", "==", reservationId)
+        ))
       ]);
       
-      // Her iki sorgunun sonuçlarını birleştir
-      const allBorcDocs = [...borcSnapshot1.docs, ...borcSnapshot2.docs];
-      
-      // Duplicate'leri kaldır (aynı ID'ye sahip olanları)
-      const uniqueBorcDocs = allBorcDocs.filter((doc, index, self) => 
-        index === self.findIndex(d => d.id === doc.id)
-      );
+      // Her iki sorgunun sonuçlarını birleştir ve duplicate'leri kaldır
+      const uniqueBorcDocs = [...borcSnapshot1.docs, ...borcSnapshot2.docs]
+        .filter((doc, index, self) => index === self.findIndex(d => d.id === doc.id));
       
       console.log(`${uniqueBorcDocs.length} borç kaydı bulundu`);
       
       // Etkilenen cari ID'lerini topla
       const etkilenenCariIds = new Set<string>();
       
-      // Borç kayıtlarını sil
+      // Her bir borç kaydı için silme işlemi
       for (const borcDoc of uniqueBorcDocs) {
         const borcData = borcDoc.data();
         etkilenenCariIds.add(borcData.cariId);
         
         console.log(`Borç kaydı siliniyor: ${borcDoc.id} (Cari: ${borcData.cariId})`);
         
-        // İlgili ödeme kayıtlarını da sil
+        // İlgili tüm ödeme kayıtlarını bul ve sil
         const odemeQuery = query(
           collection(db, COLLECTIONS.reservation_cari_odemeler),
           where("borcId", "==", borcDoc.id)
         );
         const odemeSnapshot = await getDocs(odemeQuery);
         
-        for (const odemeDoc of odemeSnapshot.docs) {
+        // Ödemeleri sil
+        const odemeDeletePromises = odemeSnapshot.docs.map(async (odemeDoc) => {
           console.log(`Ödeme kaydı siliniyor: ${odemeDoc.id}`);
           await deleteDoc(doc(db, COLLECTIONS.reservation_cari_odemeler, odemeDoc.id));
-        }
+        });
+        await Promise.all(odemeDeletePromises);
         
         // Borç kaydını sil
         await deleteDoc(doc(db, COLLECTIONS.reservation_cari_borclar, borcDoc.id));
@@ -888,11 +922,15 @@ export class ReservationCariService {
       
       console.log(`${etkilenenCariIds.size} cari kartı kontrol edilecek`);
       
-      // Etkilenen cari kartlarını kontrol et ve gerekirse sil
-      for (const cariId of etkilenenCariIds) {
-        console.log(`Cari kontrol ediliyor: ${cariId}`);
-        await this.checkAndDeleteEmptyCari(cariId);
-      }
+      // Etkilenen cari kartlarını kontrol et ve boş ise sil
+      const cariCheckPromises = Array.from(etkilenenCariIds).map(async (cariId) => {
+        try {
+          await this.checkAndDeleteEmptyCari(cariId);
+        } catch (error) {
+          console.error(`Cari kontrol hatası (${cariId}):`, error);
+        }
+      });
+      await Promise.all(cariCheckPromises);
       
       console.log(`Rezervasyon cari temizliği tamamlandı: ${reservationId}`);
       
@@ -909,30 +947,51 @@ export class ReservationCariService {
       
       console.log(`Boş cari kontrolü: ${cariId}`);
       
-      // Bu cariye ait borç kayıtları var mı kontrol et
+      // Önce cari kartı bilgilerini al
+      const cariRef = doc(db, COLLECTIONS.reservation_cari, cariId);
+      const cariDoc = await getDoc(cariRef);
+      
+      if (!cariDoc.exists()) {
+        console.log(`Cari kartı zaten silinmiş: ${cariId}`);
+        return;
+      }
+      
+      const cariData = cariDoc.data();
+      
+      // Bu cariye ait tüm borç kayıtlarını kontrol et
       const borcQuery = query(
         collection(db, COLLECTIONS.reservation_cari_borclar),
         where("cariId", "==", cariId)
       );
       const borcSnapshot = await getDocs(borcQuery);
       
-      console.log(`Cari ${cariId} için ${borcSnapshot.docs.length} borç kaydı bulundu`);
+      // Bu cariye ait tüm ödemeleri kontrol et
+      const odemeQuery = query(
+        collection(db, COLLECTIONS.reservation_cari_odemeler),
+        where("cariId", "==", cariId)
+      );
+      const odemeSnapshot = await getDocs(odemeQuery);
       
-      // Eğer hiç borç kaydı yoksa cari kartını sil
-      if (borcSnapshot.empty) {
-        // Önce cari kartı bilgisini al (log için)
-        const cariRef = doc(db, COLLECTIONS.reservation_cari, cariId);
-        const cariDoc = await getDoc(cariRef);
-        const cariName = cariDoc.exists() ? cariDoc.data().companyName : 'Bilinmeyen';
+      console.log(`Cari ${cariId} için:
+        - ${borcSnapshot.docs.length} borç kaydı
+        - ${odemeSnapshot.docs.length} ödeme kaydı bulundu`);
+      
+      // Eğer hiç borç ve ödeme kaydı yoksa cari kartını sil
+      if (borcSnapshot.empty && odemeSnapshot.empty) {
+        // Kalan ödeme kayıtlarını temizle
+        const deleteOdemePromises = odemeSnapshot.docs.map(doc => 
+          deleteDoc(doc.ref)
+        );
+        await Promise.all(deleteOdemePromises);
         
+        // Cari kartını sil
         await deleteDoc(cariRef);
-        console.log(`Boş cari kartı silindi: ${cariName} (${cariId})`);
+        console.log(`Boş cari kartı silindi: ${cariData.companyName} (${cariId})`);
       } else {
         // Borç kayıtları varsa bakiyeyi güncelle
         console.log(`Cari ${cariId} boş değil, bakiye güncelleniyor`);
         await this.updateCariBalance(cariId);
       }
-      
     } catch (error) {
       console.error("Boş cari kontrol hatası:", error);
       throw error;
@@ -998,33 +1057,68 @@ export class ReservationCariService {
     try {
       const db = this.getFirestore();
       
-      // Bu cariye ait tüm borç kayıtlarını bul ve sil
+      console.log(`Cari silme işlemi başlatıldı: ${cariId}`);
+      
+      // 1. Bu cariye ait tüm borç kayıtlarını bul ve sil
       const borcQuery = query(
         collection(db, COLLECTIONS.reservation_cari_borclar),
         where("cariId", "==", cariId)
       );
       const borcSnapshot = await getDocs(borcQuery);
       
+      // Borç kayıtlarını ve bağlantılı ödemeleri sil
       for (const borcDoc of borcSnapshot.docs) {
-        // İlgili ödeme kayıtlarını sil
+        // Her borç kaydı için ilgili ödemeleri bul ve sil
         const odemeQuery = query(
           collection(db, COLLECTIONS.reservation_cari_odemeler),
           where("borcId", "==", borcDoc.id)
         );
         const odemeSnapshot = await getDocs(odemeQuery);
         
+        // Ödemeleri tek tek sil
         for (const odemeDoc of odemeSnapshot.docs) {
-          await deleteDoc(doc(db, COLLECTIONS.reservation_cari_odemeler, odemeDoc.id));
+          await deleteDoc(odemeDoc.ref);
+          console.log(`Ödeme silindi: ${odemeDoc.id}`);
         }
         
         // Borç kaydını sil
-        await deleteDoc(doc(db, COLLECTIONS.reservation_cari_borclar, borcDoc.id));
+        await deleteDoc(borcDoc.ref);
+        console.log(`Borç kaydı silindi: ${borcDoc.id}`);
       }
       
-      // Cari kartını sil
-      await deleteDoc(doc(db, COLLECTIONS.reservation_cari, cariId));
-
-      console.log(`Cari kartı ve tüm ilgili kayıtlar silindi: ${cariId}`);
+      // 2. Bu cariye ait tüm genel ödemeleri bul ve sil
+      const genelOdemeQuery = query(
+        collection(db, COLLECTIONS.reservation_cari_odemeler),
+        where("cariId", "==", cariId)
+      );
+      const genelOdemeSnapshot = await getDocs(genelOdemeQuery);
+      
+      // Genel ödemeleri sil
+      for (const odemeDoc of genelOdemeSnapshot.docs) {
+        await deleteDoc(odemeDoc.ref);
+        console.log(`Genel ödeme silindi: ${odemeDoc.id}`);
+      }
+      
+      // 3. Bu carinin rezervasyon bağlantılarını temizle
+      const reservationQuery = query(
+        collection(db, 'reservations'),
+        where("cariId", "==", cariId)
+      );
+      const reservationSnapshot = await getDocs(reservationQuery);
+      
+      for (const resDoc of reservationSnapshot.docs) {
+        await updateDoc(resDoc.ref, {
+          cariId: deleteField(),
+          cariLink: deleteField(),
+          updatedAt: Timestamp.now()
+        });
+        console.log(`Rezervasyon bağlantısı temizlendi: ${resDoc.id}`);
+      }
+      
+      // 4. Son olarak cari kartını sil
+      const cariRef = doc(db, COLLECTIONS.reservation_cari, cariId);
+      await deleteDoc(cariRef);
+      console.log(`Cari kartı silindi: ${cariId}`);
 
     } catch (error) {
       console.error("Cari silme hatası:", error);
