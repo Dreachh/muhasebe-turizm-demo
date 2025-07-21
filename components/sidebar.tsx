@@ -12,7 +12,7 @@ import {
   ChevronRight,
   ChevronLeft,
   Users,
-  LogOut,
+  // LogOut, - Kaldırıldı
   Receipt, // Borç simgesi için eklendi
   BookOpen, // Rezervasyon simgesi için eklendi
   Globe,
@@ -34,13 +34,8 @@ export function Sidebar({ currentView, onNavigate, onCollapsedChange }: SidebarP
     onCollapsedChange?.(newCollapsed);
   };
 
-  // Logout fonksiyonu
-  const handleLogout = () => {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('adminLoggedIn');
-      window.location.href = '/admin/login';
-    }
-  };
+  // Authentication sistemi kaldırıldı - MySQL'e geçiş
+
   return (
     <div
       className={`bg-white text-gray-700 border-r shadow-sm transition-all duration-300 ${
@@ -118,10 +113,7 @@ export function Sidebar({ currentView, onNavigate, onCollapsedChange }: SidebarP
               <Settings className="h-4 w-4 shrink-0" />
               {!collapsed && <span className="ml-1 md:ml-2 text-left block w-full text-xs md:text-sm">Ayarlar</span>}
             </Button>
-            <Button variant="ghost" className="w-full justify-start items-center text-left px-1 md:px-2 py-2 text-red-600 hover:bg-red-100 hover:text-red-700 font-bold" onClick={handleLogout}>
-              <LogOut className="h-4 w-4 shrink-0" />
-              {!collapsed && <span className="ml-1 md:ml-2 text-left block w-full text-xs md:text-sm">Uygulamadan Çık</span>}
-            </Button>
+            {/* Logout button kaldırıldı - Authentication sistemi yok */}
           </div>
         </nav>
       </div>

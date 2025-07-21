@@ -1,9 +1,0 @@
-"use client";
-
-// Sayfa devre dışı bırakıldı ve ana sayfaya yönlendirildi
-import { redirect } from 'next/navigation';
-
-export default function LoginPage() {
-  redirect('/');
-  return null;
-}

@@ -26,9 +26,8 @@ import { Sidebar } from "../components/sidebar"
 import { useRouter } from 'next/navigation'
 import { generateUUID } from "../lib/utils";
 // import loadInitialData from "../data/reload-data" // DEVRE DIŞI BIRAKILDI - Test verileri kaldırıldı
-import { useAuth } from "../lib/firebase-auth" // Firebase Authentication hook
+// Firebase Authentication kaldırıldı - MySQL'e geçiş
 import CompanyManagement from "../components/company-management" // Yeni: Firma yönetimi
-import DebtManagement from "../components/debt-management" // Yeni: Borç yönetimi 
 import PaymentManagement from "../components/payment-management" // Yeni: Ödeme yönetimi
 import { CurrencyView } from "../components/currency-view" // Döviz görünümü
 import { PeriodDataView } from "../components/period-data-view" // Yeni: Dönem Verileri görünümü
@@ -279,21 +278,7 @@ export default function Home() {  const [currentView, setCurrentView] = useState
     }
   };
   useEffect(() => {
-    try {
-      // Firebase Authentication ile giriş kontrolü
-      const isLoggedIn = localStorage.getItem('adminLoggedIn');
-      if (!isLoggedIn) {
-        // Oturum yoksa verileri temizle
-        localStorage.removeItem('financialData');
-        localStorage.removeItem('toursData');
-        localStorage.removeItem('customerData');
-        // Login sayfasına yönlendir (artık /admin/login yerine /login)
-        router.push('/login');
-      }
-      // Eğer giriş yapılmışsa ana sayfada kal
-    } catch (err) {
-      console.error('Home redirect error:', err);
-    }
+    // Authentication kontrolleri kaldırıldı - MySQL'e geçiş
   }, [router]);
 
   useEffect(() => {

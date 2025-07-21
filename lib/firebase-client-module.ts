@@ -3,7 +3,7 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 import { getDatabase } from 'firebase/database';
-import { getAuth } from 'firebase/auth';
+// Auth kaldırıldı - MySQL'e geçiş
 
 // Firebase yapılandırmasını import et
 import { firebaseConfig } from './firebase-config';
@@ -12,7 +12,7 @@ import { firebaseConfig } from './firebase-config';
 let app: any = null; // FirebaseApp
 let db: any = null; // Firestore
 let rtdb: any = null; // Realtime Database
-let auth: any = null; // Auth
+// Auth kaldırıldı
 let firebaseInitialized = false;
 
 // Firebase başlatma fonksiyonu - Tek bir instance sağlar
@@ -39,9 +39,7 @@ export const initializeFirebaseClient = () => {
     rtdb = getDatabase(app);
     console.log("Realtime Database initialized successfully.");
 
-    console.log("Attempting to initialize Firebase Auth...");
-    auth = getAuth(app);
-    console.log("Firebase Auth initialized successfully.");
+    // Auth kaldırıldı - MySQL'e geçiş
     
     firebaseInitialized = true;
     console.log("Firebase client module initialization complete.");
@@ -53,15 +51,15 @@ export const initializeFirebaseClient = () => {
     if (!app) console.error("Firebase app initialization failed.");
     if (!db) console.error("Firestore initialization failed.");
     if (!rtdb) console.error("Realtime Database initialization failed.");
-    if (!auth) console.error("Firebase Auth initialization failed.");
+    // Auth kontrolü kaldırıldı
     return { success: false, error };
   }
 };
 
 // Firebase başlatılıp başlatılmadığını kontrol eden fonksiyon
 export const isFirebaseInitialized = () => {
-  // Check both the flag and the actual app instances
-  return firebaseInitialized && app && db && auth;
+  // Auth kontrolü kaldırıldı
+  return firebaseInitialized && app && db;
 };
 
 // Firebase başlat (tek bir instance oluştur)
@@ -99,16 +97,8 @@ export const getFirebaseApp = () => {
   }
   return app;
 };
-export const getFirebaseAuth = () => {
-  if (!auth) {
-    console.warn("getFirebaseAuth called but Firebase Auth (auth) is not initialized.");
-    initializeFirebaseClient();
-    if(!auth) console.error("!!! Firebase Auth (auth) is still not available after re-attempt in getFirebaseAuth.");
-  }
-  return auth;
-};
 
-// Doğrudan erişim için (Bu değişkenler artık modül kapsamında initializeFirebaseClient içinde dolduruluyor)
-// Bu export'lar, initializeFirebaseClient çağrıldıktan sonra değerlere sahip olacak.
-// Ancak, yukarıdaki getter fonksiyonlarını kullanmak daha güvenli olabilir.
-export { db, rtdb, app, auth };
+// Auth fonksiyonu kaldırıldı - MySQL'e geçiş
+
+// Doğrudan erişim için
+export { db, rtdb, app };

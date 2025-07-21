@@ -594,87 +594,6 @@ export const getCompanies = async (): Promise<any[]> => {
   }
 };
 
-// Admin kimlik bilgilerini alma
-export async function getAdminCredentials() {
-  try {
-    // Firestore instance'ını al
-    const firestore = getDb();
-    if (!firestore) {
-      throw new Error("Firestore instance'ına erişilemedi");
-    }
-    
-    const docRef = doc(firestore, "admin", "credentials");
-    const docSnap = await getDoc(docRef);
-    
-    if (docSnap.exists()) {
-      return docSnap.data() as { 
-        username: string; 
-        password: string;
-        email: string;
-      };
-    } else {
-      console.error("Admin kimlik bilgileri bulunamadı");
-      return { username: "", password: "", email: "" };
-    }
-  } catch (error) {
-    console.error("Admin bilgilerini alma hatası:", error);
-    return { username: "", password: "", email: "" };
-  }
-}
-
-// Admin kullanıcı adını güncelleme
-export async function updateAdminUsername(newUsername: string) {
-  try {
-    // Firestore instance'ını al
-    const firestore = getDb();
-    if (!firestore) {
-      throw new Error("Firestore instance'ına erişilemedi");
-    }
-    
-    const docRef = doc(firestore, "admin", "credentials");
-    await updateDoc(docRef, {
-      username: newUsername,
-      updatedAt: serverTimestamp()
-    });
-    return { success: true };
-  } catch (error) {
-    console.error("Admin kullanıcı adı güncelleme hatası:", error);
-    return { success: false, error };
-  }
-}
-
-// Admin şifresini güncelleme
-export async function updateAdminPassword(newPassword: string) {
-  try {
-    // Firestore instance'ını al
-    const firestore = getDb();
-    if (!firestore) {
-      throw new Error("Firestore instance'ına erişilemedi");
-    }
-    
-    const docRef = doc(firestore, "admin", "credentials");
-    await updateDoc(docRef, {
-      password: newPassword,
-      updatedAt: serverTimestamp()
-    });
-    return { success: true };
-  } catch (error) {
-    console.error("Admin şifre güncelleme hatası:", error);
-    return { success: false, error };
-  }
-}
-
-// Admin e-posta adresini kontrol etme
-export async function verifyAdminEmail(email: string) {
-  try {
-    const adminData = await getAdminCredentials();
-    return { success: true, isValid: email.toLowerCase() === adminData.email.toLowerCase() };
-  } catch (error) {
-    console.error("Admin e-posta doğrulama hatası:", error);
-    return { success: false, isValid: false, error };
-  }
-}
-
 // Oturum versiyon sistemi için fonksiyonlar
 // Geçerli oturum versiyonunu alma
 export async function getSessionVersion() {
@@ -685,7 +604,7 @@ export async function getSessionVersion() {
       throw new Error("Firestore instance'ına erişilemedi");
     }
     
-    const docRef = doc(firestore, "admin", "session_config");
+    const docRef = doc(firestore, "settings", "session_config");
     const docSnap = await getDoc(docRef);
     
     if (docSnap.exists()) {
@@ -712,7 +631,7 @@ export async function incrementSessionVersion() {
     if (!firestore) {
       throw new Error("Firestore instance'ına erişilemedi");
     }
-    const docRef = doc(firestore, "admin", "session_config");
+    const docRef = doc(firestore, "settings", "session_config");
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
       const currentVersion = docSnap.data().version || 1;

@@ -11,8 +11,7 @@ export async function middleware(request: NextRequest) {
   // Login sayfasına gelen tüm istekleri ana sayfaya yönlendir
   if (
     request.nextUrl.pathname === '/login' ||
-    request.nextUrl.pathname.includes('/login') ||
-    request.nextUrl.pathname.startsWith('/admin/login')
+    request.nextUrl.pathname.includes('/login')
   ) {
     console.log('Login sayfası isteği ana sayfaya yönlendiriliyor');
     return NextResponse.redirect(new URL('/', request.url));
@@ -35,7 +34,6 @@ export const config = {
   matcher: [
     '/',
     '/login',
-    '/admin/login',
     '/api/:path*',
     '/_next/static/:path*',
   ],

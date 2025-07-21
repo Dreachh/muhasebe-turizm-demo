@@ -4,7 +4,7 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Home, Menu } from "lucide-react"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
-import LogoutButton from "./logout-button"
+// LogoutButton kaldırıldı - Authentication sistemi yok
 
 interface MainHeaderProps {
     currentView: string;
@@ -98,7 +98,7 @@ export function MainHeader({ currentView, onNavigate }: MainHeaderProps) {
               <Home className="h-5 w-5 mr-1" />
               Ana Sayfa
             </Button>
-            <LogoutButton className="ml-2" />
+            {/* LogoutButton kaldırıldı - Authentication sistemi yok */}
           </nav>
         </div>
       </div>

@@ -3,7 +3,7 @@
 // Firebase yapılandırması
 import { initializeApp, getApps, FirebaseApp } from "firebase/app";
 import { getFirestore, Firestore } from "firebase/firestore";
-import { getAuth, Auth } from "firebase/auth";
+// Auth kaldırıldı - MySQL'e geçiş
 import { getStorage } from "firebase/storage";
 import { getDatabase, Database } from "firebase/database";
 
@@ -13,7 +13,7 @@ import { firebaseConfig, isServerSide } from './firebase-config';
 // Singleton Firebase servislerini içerecek değişkenler
 let app: FirebaseApp;
 let db: Firestore;
-let auth: Auth;
+// Auth kaldırıldı
 let storage: any;
 let rtdb: Database;
 
@@ -37,7 +37,7 @@ function initFirebase(): boolean {
       console.log("Firebase uygulaması başlatılıyor...");
       app = initializeApp(firebaseConfig);
       db = getFirestore(app);
-      auth = getAuth(app);
+      // Auth kaldırıldı - MySQL'e geçiş
       rtdb = getDatabase(app);
       storage = getStorage(app);
       console.log("Firebase servisleri başarıyla başlatıldı");
@@ -57,7 +57,7 @@ function initFirebase(): boolean {
 const firebaseInitialized = initFirebase();
 
 // Firebase servislerini dışa aktar
-export { app, db, rtdb, auth, storage, firebaseInitialized };
+export { app, db, rtdb, storage, firebaseInitialized };
 
 // İstemci tarafında Firebase'i yeniden başlatmak için kullanılacak fonksiyon
 export function clientInitializeFirebase(): boolean {
@@ -76,24 +76,4 @@ export function clientInitializeFirebase(): boolean {
   }
 }
 
-// Alternatif giriş yöntemi: Direkt kullanıcı oluşturma ve auth bypass
-// Bu fonksiyon gelişmiş kullanım içindir - sadece geliştirme ortamında kullanın
-export async function bypassLogin(email: string, password: string) {
-  try {
-    console.log("Direkt giriş denemesi başlatılıyor...");
-    
-    // Firebase başlatıldığından emin ol
-    initFirebase();
-    const authInstance = getAuth();
-    
-    // E-posta ve şifre ile giriş yap
-    const { signInWithEmailAndPassword } = await import("firebase/auth");
-    const userCredential = await signInWithEmailAndPassword(authInstance, email, password);
-    
-    // Sonucu döndür
-    return userCredential.user;
-  } catch (error: any) {
-    console.error("Direkt giriş hatası:", error.code, error.message);
-    throw error;
-  }
-}
+// Auth sistemi kaldırıldı - MySQL'e geçiş

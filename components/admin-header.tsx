@@ -133,8 +133,8 @@ export function AdminHeader() {
         document.cookie = "admin_session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
         document.cookie = "session_version=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
         
-        // Login sayfasına yönlendir
-        router.push('/admin/login');
+        // Admin sistemi kaldırıldı - MySQL'e geçiş
+        router.push('/login');
       } else {
         toast({
           title: "Hata",
@@ -167,7 +167,7 @@ export function AdminHeader() {
     document.cookie = "session_version=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
     
     // Login sayfasına yönlendir
-    router.push('/admin/login');
+    router.push('/login');
   };
   
   return (
